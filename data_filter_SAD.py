@@ -1,5 +1,5 @@
 '''
-Using SAD and RANSAC filter
+Using SAD filter
 '''
 import numpy as np
 import matplotlib
