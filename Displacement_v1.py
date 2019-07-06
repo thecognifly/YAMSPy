@@ -1,5 +1,6 @@
 '''
-Using SAD filter
+Just using SAD filter with mode of data set
+NOT IN SCALE
 '''
 import numpy as np
 import matplotlib
