@@ -3,7 +3,7 @@ This program used SAD filter for filter the not usable data_
 The vertical movement is depending on the amount of x-axis vector
 Fitler send back
 self.dx | self.dy -> Mean of the x-y direction movement
-self.dz -> UP (1) Down(-1) Hove(-1)
+self.dz -> UP (1) Down(-1) Hove(0)
 >> 12 July 2019
 '''
 
