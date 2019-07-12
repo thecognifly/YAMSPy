@@ -3,7 +3,7 @@ This program used SAD filter for filter the not usable data_
 The vertical movement is depending on the amount of x-axis vector
 Fitler send back
 self.dx | self.dy -> Mean of the x-y direction movement
-self.dz -> UP (1) Down(-1) Hove(0)
+self.dz -> UP (1) Down(-1) Hove(-1)
 >> 12 July 2019
 '''
 
@@ -13,6 +13,18 @@ import math
 import time
 from matplotlib import pyplot as plt
 from scipy import stats
+
+# /////////////////////////
+# >>> Import Data
+# /////////////////////////
+data = np.load('data_of.npy', allow_pickle=True)# import the raw data
+data = data[700:950] # Only usable at 700-950
+# data = np.load('updown.npy')
+# data = data[200:310]
+# data = np.load('leftright.npy')
+# data = data[160:310]
+# data = np.load('leftright_angle.npy')
+# data = data[200:350]
 
 class Filter():
     def __init__(self):
@@ -24,8 +36,17 @@ class Filter():
         self.DIFF_THRESHOLD = 0.3
         # @ the minimum number of the usable data
         self.DATA_THRESHOLD = 150
+        # @ PIXEL SIZE of Pi camera
+        self.PIXEL_SIZE_CM = (4*1.4) / 10000 # 1.4um 4x4 binning
+        # @ Focal Length of Pi camera
+        self.FOCAL_LENGTH_CM = 0.36 # 3.6mm
         # @ The movement of the frame
         self.dx = self.dy = 0
+        # @ The ground truth
+        self.gnd_x = self.gnd_y = 0
+        # @ The altitude of the frame
+        self.altitude = 40 # cm
+
 
     def import_data(self, data):
         # /////////////////////////
@@ -66,7 +87,7 @@ class Filter():
         # /////////////////////////
         # >>> Creating 1D array for x and y instead of 2D
         # /////////////////////////
-        return data.ravel()
+        return data.ravel()self.DATA_THRESHOLD
 
     def plot(self, j):
         # /////////////////////////
@@ -121,6 +142,14 @@ class Filter():
         # /////////////////////////
         return (data[(np.where(data!= 0)[0])]) # return nonzero data
 
+    def px2gnd(self):
+        # /////////////////////////
+        # >>> px displacement to ground displacement
+        # >>> GND_DIS = PIXEL_SIZE * PX_DIS * altitude / FOCAL_LENGTH
+        # /////////////////////////
+        self.gnd_x = ((PIXEL_SIZE_CM * self.x * self.altitude)/self.FOCAL_LENGTH_CM)
+        self.gnd_y = ((PIXEL_SIZE_CM * self.y * self.altitude)/self.FOCAL_LENGTH_CM)
+
     def vtl_dir(self):
         # /////////////////////////
         # >>> Dectect the left side of the frame
@@ -133,20 +162,19 @@ class Filter():
         data_ = ((self.x[:,int(((len(self.x[0,:]))/2)):]))
         x_1_ = len(data_[np.where(data_ < 0)[0]])
         x1_ = len(data_[np.where(data_ > 0)[0]])
-        if ((x_1 + x1) > 0 and (x_1_ + x1_) > 0):
-            if ((abs(x_1 - x1)/(x_1 + x1)) > self.DIFF_THRESHOLD and (abs(x_1_ - x1_)/(x_1_ + x1_)) > self.DIFF_THRESHOLD):
-                if ((abs(x_1 - x1)/(x_1 + x1)) > (abs(x_1_ - x1_)/(x_1_ + x1_))):
-                    if (x_1 - x1) < 0 :
-                        self.dz = -1
-                    else:
-                        self.dz = 1
+        if ((abs(x_1 - x1)/(x_1 + x1)) > self.DIFF_THRESHOLD and (abs(x_1_ - x1_)/(x_1_ + x1_)) > self.DIFF_THRESHOLD):
+            if ((abs(x_1 - x1)/(x_1 + x1)) > (abs(x_1_ - x1_)/(x_1_ + x1_))):
+                if (x_1 - x1) < 0 :
+                    self.dz = -1
                 else:
-                    if (x_1_ - x1_) < 0 :
-                        self.dz = 1
-                    else:
-                        self.dz = -1
+                    self.dz = 1
             else:
-                self.dz = 0
+                if (x_1_ - x1_) < 0 :
+                    self.dz = 1
+                else:
+                    self.dz = -1
+        else:
+            self.dz = 0
 
     def hrz_dir(self):
         # /////////////////////////
@@ -156,34 +184,34 @@ class Filter():
         self.dx = (self.ten_cut_off((self.zero_filter(self.sort(self.twoD2oneD(self.x))))))
         self.dy = (self.ten_cut_off((self.zero_filter(self.sort(self.twoD2oneD(self.y))))))
         self.dz = 0
-        if len(self.dx)>0 :
+        if len(self.dx)>self.DATA_THRESHOLD :
             self.dx = self.dx.mean()
         else:
-            self.dx = 0
-        if len(self.dy)>0 :
+            self.dx = -1
+        if len(self.dy)>self.DATA_THRESHOLD :
             self.dy = self.dy.mean()
         else:
-            self.dy =0
+            self.dy =-1
 
     def run(self, data):
         # /////////////////////////
         # >>> Main Flow for filtering
         # /////////////////////////
         self.import_data(data)
+        # self.update(j) # Renew the data
         self.sad_filter() # using k = 1.8 gain to lower the SAD limit. Default is 1.5
         if (self.vtl_filter()): # Return True if not vertical movement
             self.hrz_dir()
         else:
             self.vtl_dir()
         print ("Up(1)/Donw(-1): %3f  |  dx = %3f  |  dy = %3f" % (self.dz, self.dx, self.dy))
-        # self.plot(j)
+        self.plot(j)
 
 # /////////////////////////
 # >>> Main
 # /////////////////////////
     def main(self, data, j):
-        self.update(j) # Renew the data
-        self.run()
+        self.run(data)
 if __name__ == '__main__':
     for j in range (len(data)):
         Filter().main(data, j)
