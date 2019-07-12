@@ -14,18 +14,6 @@ import time
 from matplotlib import pyplot as plt
 from scipy import stats
 
-# /////////////////////////
-# >>> Import Data
-# /////////////////////////
-# data = np.load('data_of.npy', allow_pickle=True)# import the raw data
-# data = data[700:950] # Only usable at 700-950
-# data = np.load('updown.npy')
-# data = data[200:310]
-data = np.load('leftright.npy')
-data = data[160:310]
-# data = np.load('leftright_angle.npy')
-# data = data[200:350]
-
 class Filter():
     def __init__(self):
         # @ MIN_DATA is the minimum amount of data captured by optical flow
@@ -198,7 +186,7 @@ class Filter():
         # >>> Main Flow for filtering
         # /////////////////////////
         self.import_data(data)
-        self.update(j) # Renew the data
+        # self.update(j) # Renew the data
         self.sad_filter() # using k = 1.8 gain to lower the SAD limit. Default is 1.5
         if (self.vtl_filter()): # Return True if not vertical movement
             self.hrz_dir()
