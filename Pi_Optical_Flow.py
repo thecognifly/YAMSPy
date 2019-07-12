@@ -4,6 +4,7 @@ import time
 import cv2
 import picamera
 from picamera.array import PiMotionAnalysis, PiRGBArray
+from data_process import Filter
 
 
 class GestureDetector(PiMotionAnalysis):
@@ -17,15 +18,7 @@ class GestureDetector(PiMotionAnalysis):
         self.last_move = ''
 
     def analyze(self, a):
-        # Roll the queues and overwrite the first element with a new
-        # mean (equivalent to pop and append, but faster)
-        self.x_queue[1:] = self.x_queue[:-1]
-        self.y_queue[1:] = self.y_queue[:-1]
-        self.x_queue[0] = a['x'].mean()
-        self.y_queue[0] = a['y'].mean()
-        # Calculate the mean of both queues
-        x_mean = self.x_queue.mean()
-        y_mean = self.y_queue.mean()
+        Filter().run(a)
 
 
 def snap_shot(cam):
