@@ -20,6 +20,8 @@ class Filter():
         self.MIN_NUM_DATA = 20
         # @ the minimum precentage of the up and down vector different
         self.VTL_THRESHOLD = 0.6
+        # @ the minimum precentage of the pos and neg vector different
+        self.DIFF_THRESHOLD = 0.3
         # @ the minimum number of the usable data
         self.DATA_THRESHOLD = 150
         # @ The movement of the frame
@@ -131,19 +133,20 @@ class Filter():
         data_ = ((self.x[:,int(((len(self.x[0,:]))/2)):]))
         x_1_ = len(data_[np.where(data_ < 0)[0]])
         x1_ = len(data_[np.where(data_ > 0)[0]])
-        if ((abs(x_1 - x1)/(x_1 + x1)) > 0.4 and (abs(x_1_ - x1_)/(x_1_ + x1_)) > 0.4):
-            if ((abs(x_1 - x1)/(x_1 + x1)) > (abs(x_1_ - x1_)/(x_1_ + x1_))):
-                if (x_1 - x1) < 0 :
-                    self.dz = -1
+        if ((x_1 + x1) > 0 and (x_1_ + x1_) > 0):
+            if ((abs(x_1 - x1)/(x_1 + x1)) > self.DIFF_THRESHOLD and (abs(x_1_ - x1_)/(x_1_ + x1_)) > self.DIFF_THRESHOLD):
+                if ((abs(x_1 - x1)/(x_1 + x1)) > (abs(x_1_ - x1_)/(x_1_ + x1_))):
+                    if (x_1 - x1) < 0 :
+                        self.dz = -1
+                    else:
+                        self.dz = 1
                 else:
-                    self.dz = 1
+                    if (x_1_ - x1_) < 0 :
+                        self.dz = 1
+                    else:
+                        self.dz = -1
             else:
-                if (x_1_ - x1_) < 0 :
-                    self.dz = 1
-                else:
-                    self.dz = -1
-        else:
-            self.dz = 0
+                self.dz = 0
 
     def hrz_dir(self):
         # /////////////////////////
