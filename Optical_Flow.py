@@ -135,8 +135,14 @@ class Filter():
         # >>> px displacement to ground displacement
         # >>> GND_DIS = PIXEL_SIZE * PX_DIS * altitude / FOCAL_LENGTH
         # /////////////////////////
-        self.gnd_x = ((self.PIXEL_SIZE_CM * self.dx * self.altitude)/self.FOCAL_LENGTH_CM)
-        self.gnd_y = ((self.PIXEL_SIZE_CM * self.dy * self.altitude)/self.FOCAL_LENGTH_CM)
+        if self.dx == -1 :
+            self.gnd_x = 0
+        else:
+            self.gnd_x = ((self.PIXEL_SIZE_CM * self.dx * self.altitude)/self.FOCAL_LENGTH_CM)
+        if self.dy == -1 :
+            self.gnd_y = 0
+        else:
+            self.gnd_y = ((self.PIXEL_SIZE_CM * self.dy * self.altitude)/self.FOCAL_LENGTH_CM)
 
     def vtl_dir(self):
         # /////////////////////////
