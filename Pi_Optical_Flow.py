@@ -27,3 +27,19 @@ def snap_shot(cam):
     camera.capture(rawCapture, format="bgr")
     img = rawCapture.array
     return img
+
+with picamera.PiCamera(resolution='VGA', framerate=60) as camera:
+    camera.resolution(640,480)
+    with MovementDetector(camera) as detector:
+        camera.start_recording(
+            os.devnull, format='h264', motion_output=detector)
+        try:
+            while True:
+                camera.wait_recording(1)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            camera.stop_recording()
+            np.save('experiment', detector.data)
+            np.save('experiment_raw', detector.raw_data)
+            sleep(0.1)
