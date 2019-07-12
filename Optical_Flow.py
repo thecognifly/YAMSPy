@@ -4,6 +4,7 @@ The vertical movement is depending on the amount of x-axis vector
 Fitler send back
 self.dx | self.dy -> Mean of the x-y direction movement
 self.dz -> UP (1) Down(-1) Hove(-1)
+self.gnd_x, self.gnd_y is ground truth in meter
 >> 12 July 2019
 '''
 
@@ -33,7 +34,7 @@ class Filter():
         # @ The ground truth
         self.gnd_x = self.gnd_y = 0
         # @ The altitude of the frame
-        self.altitude = 110 # cm
+        self.altitude = 100 # cm
 
 
     def import_data(self, data):
@@ -138,11 +139,11 @@ class Filter():
         if self.dx == -1 :
             self.gnd_x = 0
         else:
-            self.gnd_x = ((self.PIXEL_SIZE_CM * self.dx * self.altitude)/self.FOCAL_LENGTH_CM)
+            self.gnd_x = ((self.PIXEL_SIZE_CM * self.dx * self.altitude)/self.FOCAL_LENGTH_CM)*1.25 / 10
         if self.dy == -1 :
             self.gnd_y = 0
         else:
-            self.gnd_y = ((self.PIXEL_SIZE_CM * self.dy * self.altitude)/self.FOCAL_LENGTH_CM)
+            self.gnd_y = ((self.PIXEL_SIZE_CM * self.dy * self.altitude)/self.FOCAL_LENGTH_CM)*1.25 / 10
 
     def vtl_dir(self):
         # /////////////////////////
@@ -192,13 +193,13 @@ class Filter():
         # >>> Main Flow for filtering
         # /////////////////////////
         self.import_data(data)
-        # self.update(j) # Renew the data
+        self.update(j) # Renew the data
         self.sad_filter() # using k = 1.8 gain to lower the SAD limit. Default is 1.5
         if (self.vtl_filter()): # Return True if not vertical movement
             self.hrz_dir()
-            self.px2gnd()
         else:
             self.vtl_dir()
+        self.px2gnd()
         print ("Up(1)/Donw(-1): %3f  |  dx = %3f  |  dy = %3f" % (self.dz, self.dx, self.dy))
         print (self.gnd_x, self.gnd_y)
         # self.plot(j)
@@ -208,6 +209,14 @@ class Filter():
 # /////////////////////////
     def main(self, data, j):
         self.run(data)
+
+filter = Filter()
 if __name__ == '__main__':
+    _data = []
+    x = y = 0
     for j in range (len(data)):
-        Filter().main(data, j)
+        _data.append((x, y))
+        filter.main(data, j)
+        x += filter.gnd_x
+        y += filter.gnd_y
+    np.save('walk_xy', _data)
