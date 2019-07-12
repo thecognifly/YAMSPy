@@ -4,7 +4,7 @@ The vertical movement is depending on the amount of x-axis vector
 Fitler send back
 self.dx | self.dy -> Mean of the x-y direction movement
 self.dz -> UP (1) Down(-1) Hove(-1)
-self.gnd_x, self.gnd_y is ground truth in meter
+self.gnd_x, self.gnd_y is ground truth in cm
 >> 12 July 2019
 '''
 
