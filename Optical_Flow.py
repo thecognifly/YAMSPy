@@ -17,12 +17,12 @@ from scipy import stats
 # /////////////////////////
 # >>> Import Data
 # /////////////////////////
-data = np.load('data_of.npy', allow_pickle=True)# import the raw data
-data = data[700:950] # Only usable at 700-950
+# data = np.load('data_of.npy', allow_pickle=True)# import the raw data
+# data = data[700:950] # Only usable at 700-950
 # data = np.load('updown.npy')
 # data = data[200:310]
-# data = np.load('leftright.npy')
-# data = data[160:310]
+data = np.load('leftright.npy')
+data = data[160:310]
 # data = np.load('leftright_angle.npy')
 # data = data[200:350]
 
@@ -37,7 +37,7 @@ class Filter():
         # @ the minimum number of the usable data
         self.DATA_THRESHOLD = 150
         # @ PIXEL SIZE of Pi camera
-        self.PIXEL_SIZE_CM = (4*1.4) / 10000 # 1.4um 4x4 binning
+        self.PIXEL_SIZE_CM = (16*1.4) / 10000 # 1.4um 4x4 binning
         # @ Focal Length of Pi camera
         self.FOCAL_LENGTH_CM = 0.36 # 3.6mm
         # @ The movement of the frame
@@ -45,7 +45,7 @@ class Filter():
         # @ The ground truth
         self.gnd_x = self.gnd_y = 0
         # @ The altitude of the frame
-        self.altitude = 40 # cm
+        self.altitude = 110 # cm
 
 
     def import_data(self, data):
@@ -87,7 +87,7 @@ class Filter():
         # /////////////////////////
         # >>> Creating 1D array for x and y instead of 2D
         # /////////////////////////
-        return data.ravel()self.DATA_THRESHOLD
+        return data.ravel()
 
     def plot(self, j):
         # /////////////////////////
@@ -147,8 +147,8 @@ class Filter():
         # >>> px displacement to ground displacement
         # >>> GND_DIS = PIXEL_SIZE * PX_DIS * altitude / FOCAL_LENGTH
         # /////////////////////////
-        self.gnd_x = ((PIXEL_SIZE_CM * self.x * self.altitude)/self.FOCAL_LENGTH_CM)
-        self.gnd_y = ((PIXEL_SIZE_CM * self.y * self.altitude)/self.FOCAL_LENGTH_CM)
+        self.gnd_x = ((self.PIXEL_SIZE_CM * self.dx * self.altitude)/self.FOCAL_LENGTH_CM)
+        self.gnd_y = ((self.PIXEL_SIZE_CM * self.dy * self.altitude)/self.FOCAL_LENGTH_CM)
 
     def vtl_dir(self):
         # /////////////////////////
@@ -198,14 +198,16 @@ class Filter():
         # >>> Main Flow for filtering
         # /////////////////////////
         self.import_data(data)
-        # self.update(j) # Renew the data
+        self.update(j) # Renew the data
         self.sad_filter() # using k = 1.8 gain to lower the SAD limit. Default is 1.5
         if (self.vtl_filter()): # Return True if not vertical movement
             self.hrz_dir()
+            self.px2gnd()
         else:
             self.vtl_dir()
         print ("Up(1)/Donw(-1): %3f  |  dx = %3f  |  dy = %3f" % (self.dz, self.dx, self.dy))
-        self.plot(j)
+        print (self.gnd_x, self.gnd_y)
+        # self.plot(j)
 
 # /////////////////////////
 # >>> Main
