@@ -12,11 +12,8 @@ self.gnd_x, self.gnd_y is ground truth in cm
 '''
 
 import numpy as np
-import matplotlib
 import math
 import time
-from matplotlib import pyplot as plt
-from scipy import stats
 
 
 class Filter():
@@ -74,33 +71,15 @@ class Filter():
         # /////////////////////////
         # >>> Find the most frequenly data
         # /////////////////////////
-        return stats.mode(data)[0][0]
+        # return stats.mode(data)[0][0]
+        unique, counts = np.unique(data, return_counts=True)
+        return unique[np.argmax(counts)]
 
     def twoD2oneD(self, data): # This function only work on each frame. In real time, delect all the frame argument
         # /////////////////////////
         # >>> Creating 1D array for x and y instead of 2D
         # /////////////////////////
         return data.ravel()
-
-    def plot(self, j):
-        # /////////////////////////
-        # >>> Plot the data
-        # /////////////////////////
-        plt.subplot(311)
-        plt.plot(self.dx, '.b', label = 'x')
-        plt.legend(loc='lower right')
-        plt.title("Frame %d " %(j))
-        plt.subplot(312)
-        plt.plot(self.dy, '.g', label = 'y')
-        plt.legend(loc='lower right')
-        plt.subplot(313)
-        X = range(41)
-        Y = range(30)
-        U = -self.x + 0.0001
-        V = -self.y + 0.0001
-        Q = plt.quiver(X, Y, U, V, pivot='tail', angles='xy',  scale_units='xy', scale=20)
-        plt.show()
-
 
     def sad_filter (self, k = 1.5): # This function only work on each frame. In real time, delect all the frame argument
         # /////////////////////////
@@ -116,10 +95,10 @@ class Filter():
         # >>> Finding the different of abs x and abs y
         # /////////////////////////
         x_1 = len(self.x[np.where(self.x < 0)[0]])
-        x0 = len(self.x[np.where(self.x == 0)[0]])
+        # x0 = len(self.x[np.where(self.x == 0)[0]])
         x1 = len(self.x[np.where(self.x > 0)[0]])
         y_1 = len(self.y[np.where(self.y < 0)[0]])
-        y0 = len(self.y[np.where(self.y == 0)[0]])
+        # y0 = len(self.y[np.where(self.y == 0)[0]])
         y1 = len(self.y[np.where(self.y > 0)[0]])
         px = py = 0
         if x_1 > 0 or x1 > 0 : px = (1-(abs(x_1 - x1)/(x_1+x1)))
@@ -193,7 +172,7 @@ class Filter():
         self.dy = (self.ten_cut_off((self.zero_filter(self.sort(self.twoD2oneD(self.y))))))
         self.dz = 0
         if len(self.dx)>self.DATA_THRESHOLD :
-            xmode = self.mode(self.dx)
+            # xmode = self.mode(self.dx)
             x_q1 = self.dx[int(len(self.dx)/4)] # 25% of the data
             medianx =  self.dx[int(len(self.dx)/2)] # Median of data
             x_q3 = self.dx[int(3*(len(self.dx))/4)] # 75% of the data
@@ -201,7 +180,7 @@ class Filter():
         else:
             self.dx = 0
         if len(self.dy)>self.DATA_THRESHOLD :
-            ymode = self.mode(self.dy)
+            # ymode = self.mode(self.dy)
             y_q1 = self.dy[int(len(self.dy)/4)] # 25% of the data
             mediany = self.dy[int(len(self.dy)/2)] # Median of data
             y_q3 = self.dy[int(3*(len(self.dy))/4)] # 25% of the data
@@ -220,24 +199,5 @@ class Filter():
         else:
             self.vtl_dir()
         self.px2gnd()
-        print ("Up(1)/Donw(-1): %3f  |  dx = %3f  |  dy = %3f" % (self.dz, self.dx, self.dy))
-        print (self.gnd_x, self.gnd_y)
-        # self.plot(j)
-
-# /////////////////////////
-# >>> Main
-# >>> Call Filter().run(data) when using this library
-# /////////////////////////
-    def main(self, data, j):
-        self.run(data, j)
-
-filter = Filter()
-if __name__ == '__main__':
-    _data = []
-    x = y = 0
-    for j in range (len(data)):
-        _data.append((x, y))
-        filter.main(data, j)
-        x += filter.gnd_x
-        y += filter.gnd_y
-    np.save('walk_xy', _data)
+        
+        return (self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y)
