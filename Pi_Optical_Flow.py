@@ -30,7 +30,7 @@ def snap_shot(cam):
 
 with picamera.PiCamera(resolution='VGA', framerate=60) as camera:
     camera.resolution(640,480)
-    with MovementDetector(camera) as detector:
+    with GestureDetector(camera) as detector:
         camera.start_recording(
             os.devnull, format='h264', motion_output=detector)
         try:
