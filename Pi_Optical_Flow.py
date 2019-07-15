@@ -37,7 +37,7 @@ with picamera.PiCamera(resolution='VGA', framerate=60) as camera:
             while True:
                 camera.wait_recording(1)
         except KeyboardInterrupt:
-            pass
+            break
         finally:
             camera.stop_recording()
             np.save('experiment', detector.data)
