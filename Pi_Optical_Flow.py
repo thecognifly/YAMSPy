@@ -4,7 +4,7 @@ import time
 import cv2
 import picamera
 from picamera.array import PiMotionAnalysis, PiRGBArray
-from data_process import Filter
+from Optical_Flow_Filter import Filter
 
 
 class GestureDetector(PiMotionAnalysis):
