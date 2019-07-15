@@ -1,306 +1,367 @@
-import asyncio
-import numpy as np
 import time
+import asyncio
+from concurrent.futures import TimeoutError
 import signal
+# from itertools import cycle
+# import binascii
+
+# import sys
+import os
+
 from threading import Lock
-from collections import deque
 
-from OptiTrackPython import NatNetClient, from_quaternion2rpy
+import numpy as np
 
-TIMEOUT = 1/20
-OPERATING_PERIOD = 1/20
+import uvloop
 
+from pybetaflight import pyBetaflight
+
+import picamera
+from picamera.array import PiMotionAnalysis, PiRGBArray
+
+from Optical_Flow_Filter import Filter
+
+
+BASE_VOLTAGE = 8.4 # used to compensate throttle
 
 MSG_SIZE = 36
 
-# Using MSP controller it's possible to have more auxiliary inputs than this.
-CMDS_init = {
-        'roll':     1500,
-        'pitch':    1500,
-        'throttle': 1000,
-        'yaw':      1500,
-        'aux1':     1000, # DISARMED (1000) / ARMED (1800)
-        'aux2':     1000, # ANGLE (1000) / HORIZON (1500) / FLIP (1800)
-        'aux3':     1000, # FAILSAFE (1800)
-        'aux4':     1000  # HEADFREE (1800)
-        }
-
-CMDS = CMDS_init.copy()
-
-# I'm not sure if this order changes according to the configurations made to betaflight...
-CMDS_ORDER = ['roll', 'pitch', 'throttle', 'yaw', 'aux1', 'aux2', 'aux3', 'aux4']
-
-shutdown = False
-
-voltage = 1
-
-async def main_msg_server(loop):
-    global voltage
-
-    while not shutdown:
-        print("main_msg_server starting...")
-        try:
-            reader, writer = await asyncio.wait_for(asyncio.open_connection('192.168.2.124', 8989, loop=loop), timeout=TIMEOUT)
-        except (asyncio.TimeoutError, ConnectionResetError, ConnectionRefusedError):
-            continue
-
-        try:
-            # Kind of handshake to synchronize time with server
-            handshake_message = np.zeros(int(MSG_SIZE/4), dtype=np.int8)
-            handshake_message[0] = -1
-            handshake_message[-1] = -1
-            writer.write(np.asanyarray(handshake_message, dtype=np.float32).tobytes())
-            print("Handshake sent ({})...".format(len(np.asanyarray(handshake_message, dtype=np.float32).tobytes())))
-
-            data = await asyncio.wait_for(reader.read(MSG_SIZE), timeout=TIMEOUT)
-            print("Handshake received...")
-            message = np.frombuffer(data,dtype=np.float32)
-            # server_time = message[0]
-            timestart = time.time()
-
-            message = np.zeros(1+len(CMDS_ORDER), dtype=np.float32)
-            while not shutdown:
-                timestamp = time.time() - timestart
-
-                message[:] = [timestamp] + [CMDS[ki] for ki in CMDS_ORDER]
-                # message[-1] = binascii.crc_hqx(message[:-1],0)
-                writer.write(message.tobytes())
-                # print("Sent ({}): {}".format(len(message.tobytes()), message.astype(int)))
-
-                try:
-                    data = await asyncio.wait_for(reader.read(MSG_SIZE), timeout=TIMEOUT) # read the voltage level
-                    voltage = np.frombuffer(data,dtype=np.float32)[0]
-                    # print("Received: {}".format(msg))
-                except asyncio.TimeoutError:
-                    continue
-                
-
-                await asyncio.sleep(OPERATING_PERIOD)
-
-        except asyncio.TimeoutError:
-            print("main_msg_server TimeoutError...")
-
-        except ConnectionResetError:
-            continue
+start = time.time()
 
 
-        finally:
-            if not writer.is_closing():
-                writer.close()
-                await writer.wait_closed()
+class UI_server(PiMotionAnalysis):
+    QUEUE_SIZE = 10 # the number of consecutive frames to analyze
+    THRESHOLD = 4.0 # the minimum average motion required in either axis
 
-    print("main_msg_server closing...")
-
-
-async def read_optitrack(lock_opti, optitrack_reading,
-                         client_ip='192.168.2.123',
-                         server_ip="192.168.2.100",
-                         multicast_address="239.255.42.99",
-                         rigidbody_name2track="CogniFly"):
-    print("read_optitrack started...")
-    streamingClient = NatNetClient(client_ip,
-                                   server_ip,
-                                   multicast_address)
-
-    rbname = rigidbody_name2track
-    def receiveRigidBodyFrame(timestamp, id, position, rotation, rigidBodyDescriptor):
-        if rigidBodyDescriptor:
-            if rbname in rigidBodyDescriptor:
-                if id == rigidBodyDescriptor[rbname][0]:
-                    # skips this message if still locked
-                    if lock_opti.acquire(False):
-                        try:
-                            # rotation is a quaternion!
-                            optitrack_reading[0] = [timestamp,
-                                                    position,
-                                                    rotation]
-                        finally:
-                            lock_opti.release()
-
-    # Configure the streaming client to call our rigid body handler on the emulator to send data out.
-    streamingClient.rigidBodyListener = receiveRigidBodyFrame
-
-    # Start up the streaming client now that the callbacks are set up.
-    # This will run perpetually, and operate on a separate thread.
-    streamingClient.run()
-
-    while not shutdown:
-        # the method run() will start the threads, so this task just need to stay alive...
-        # without eating up CPU cycles ;)
-        await asyncio.sleep(1)
-
-    streamingClient.close()
-    time.sleep(1)
-    print("read_optitrack closing...")
-
-async def pid(lock_opti, optitrack_reading):
-    print("pid started...")
-
-    AVG_CYCLES_ERRORS = 1
-    AVG_CYCLES_SETPNT = 1000
-
-    setpoint_list = [
-                      [0,0,0,0],
-                      [0,0,0.30,0]
-                    ]
-
-    read_values = []
-    smooth_errors = [deque([0]*AVG_CYCLES_ERRORS) for i in range(4)]
-    smooth_setpoints = [deque([0]*AVG_CYCLES_SETPNT) for i in range(4)]
-    setpoint_list.reverse() # because I'm using pop later...
-
-
-    # Generates a curve for an open loop take-off
-    THROTTLE_HOVER = 1680
-    TC = 0.3
-    TOTAL_TIME = 3
-    NSTEPS = TOTAL_TIME/OPERATING_PERIOD
-    takeoff_sequence = (THROTTLE_HOVER*(1-np.exp(-np.arange(NSTEPS)*OPERATING_PERIOD/TC))).tolist()
-    takeoff_sequence.reverse()
-    
-    await asyncio.sleep(2)    
-
-    while not shutdown:
-        # this lock is necessary because the optitrack code is using threads.
-        if lock_opti.acquire(False):
-            try:
-                # rotation is a quaternion!
-                # optitrack_reading[rbname] = [timestamp,
-                #                                 position,
-                #                                 rotation]
-                if optitrack_reading:
-                    init_pos = optitrack_reading[0][1]
-                    init_yaw = from_quaternion2rpy(optitrack_reading[0][2])[2]
-                    timestamp = optitrack_reading[0][0]
-                    break
-
-            finally:
-                lock_opti.release()
-
-        await asyncio.sleep(1)
-
-    while not shutdown:
-        # This lock is necessary because the optitrack code (internally) is using threads instead
-        # of using asyncio.
-        if lock_opti.acquire(False): # non-blocking
-            try:
-                # Data received from the OptiTrack:
-                # optitrack_reading = [timestamp, position, rotation]
-                # rotation is a quaternion!
-
-                # if the values are arriving unordered, just skip
-                if optitrack_reading[0][0]>timestamp:
-                    read_values = optitrack_reading[0].copy()
-                    read_yaw = from_quaternion2rpy(read_values[2])[2]
-                    timestamp = read_values[0]
-            finally:
-                lock_opti.release()
-
-        if len(read_values):
-            if len(setpoint_list):
-                x_read,y_read,z_read,yaw_read = setpoint_list.pop() # it will stop on the last value
-
-            for smooth_setpnt, setpnt_value in zip(smooth_setpoints, [x_read, y_read, z_read, yaw_read]):
-                smooth_setpnt.appendleft(setpnt_value)
-                smooth_setpnt.pop()
-
-            x,y,z,yaw = [sum(v)/len(v) for v in smooth_setpoints]
-
-            # correct discontinuity problem with yaw (-180 to 180) error calculation
-            error_yaw = -(yaw - read_yaw + init_yaw)
-            if error_yaw > np.pi:
-                error_yaw = error_yaw - 2*np.pi
-            elif error_yaw < -np.pi:
-                error_yaw = error_yaw + 2*np.pi
-            else:
-                error_yaw = error_yaw
-
-            orig_err_x = (read_values[1][0] - init_pos[0]) - x
-            orig_err_y = (read_values[1][1] - init_pos[1]) - y # the y is inverted on the optitrack
-                                                                # because it simply inverts z (wrong righthand rule).
-            err_z = -(read_values[1][2] - init_pos[2] - z)
-
-
-            # Keeps the drone properly aligned to the global coordinates
-            # by rotating its coordinate system according to the yaw value
-            yaw_corr = 0 # correction... it depends on how the rigidbody was created inside optitrack
-            err_x = orig_err_x*np.sin(-read_yaw+yaw_corr) + orig_err_y*np.cos(-read_yaw+yaw_corr)
-            err_y = -orig_err_y*np.sin(-read_yaw+yaw_corr) + orig_err_x*np.cos(-read_yaw+yaw_corr)
-    
-
-            for smooth_error, error_value in zip(smooth_errors, [err_x, err_y, err_z, error_yaw]):
-                smooth_error.appendleft(error_value)
-                smooth_error.pop()
-
-            avg_smooth_errors = [sum(v)/len(v) for v in smooth_errors]
-
-            # COMMANDS
-            # the PID controller will only use the average errors.
-            yaw_cmd = 1500 + YAW_GAIN*avg_smooth_errors[3]/(2*np.pi)
-            yaw_cmd = yaw_cmd if yaw_cmd >= 1000 else 1000
-            yaw_cmd = yaw_cmd if yaw_cmd <= 2000 else 2000
-
-            if len(takeoff_sequence):
-                BIAS = takeoff_sequence.pop()
-                throttle_cmd = BIAS
-                print("Take-off sequence")
-            else:
-                throttle_cmd = BIAS + Z_GAIN*avg_smooth_errors[2]
-            throttle_cmd = throttle_cmd if throttle_cmd >= 1000 else 1000
-            throttle_cmd = throttle_cmd if throttle_cmd <= 2000 else 2000
-
-            roll_cmd = 1500 + Y_GAIN*avg_smooth_errors[1]
-            roll_cmd = roll_cmd if roll_cmd >= 1400 else 1400
-            roll_cmd = roll_cmd if roll_cmd <= 1800 else 1800
-
-            pitch_cmd = 1500 + X_GAIN*avg_smooth_errors[0]
-            pitch_cmd = pitch_cmd if pitch_cmd >= 1400 else 1400
-            pitch_cmd = pitch_cmd if pitch_cmd <= 1800 else 1800
-
-
-            # CMDS['yaw'] = yaw_cmd
-            CMDS['throttle'] = throttle_cmd
-            CMDS['pitch'] = pitch_cmd
-            CMDS['roll'] = roll_cmd
-            CMDS['aux1'] = 1800
-            print("CONTRL (COMP):", int((8.4/voltage)*roll_cmd), int((8.4/voltage)*pitch_cmd), int((8.4/voltage)*throttle_cmd), int((8.4/voltage)*yaw_cmd))
-            print("CONTRL:", int(roll_cmd), int(pitch_cmd), int(throttle_cmd), int(yaw_cmd))
-            # print("AVG ERRORS:",avg_smooth_errors)
-            # print("CMDS:",[CMDS[ki] for ki in CMDS_ORDER])
+    def __init__(self, camera, 
+                       board = None, freq = 30,
+                       failsafe = 0.1, 
+                       ip = '127.0.0.1', port = 8989):
         
-        read_values = []
-        await asyncio.sleep(OPERATING_PERIOD)
+        super(UI_server, self).__init__(camera)
+        self.filter = Filter()
+
+        self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y = 0, 0, 0, 0, 0
+
+        self.lock_opticalflow = Lock()
+
+        self.failsafe = failsafe
+        self.ip = ip
+        self.port = port
+
+        self.min_period = 1/freq
+
+        self.main_message_in = []
+
+        self.slow_message_in = []
+        self.slow_message_out = []
+
+        self.board = board
+
+        self.shutdown = False
+
+        self.connected = 0 # it needs to be initialized here, or main_loop will crash
+
+        self.handshake_message = np.zeros(int(MSG_SIZE/4), dtype=np.int8)
+        self.handshake_message[0] = -1
+        self.handshake_message[-1] = -1
+
+        self.voltage = 0
+
+        self.prev_time = 0
+
+        # It's necessary to send some messages or the RX failsafe will be active
+        # and it will not be possible to arm.
+        command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
+                        'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
+                        'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES', 'MSP_ANALOG']
+        if self.board:
+            for msg in command_list: 
+                if self.board.send_RAW_msg(pyBetaflight.MSPCodes[msg], data=[]):
+                    dataHandler = self.board.receive_msg()
+                    self.board.process_recv_data(dataHandler)
+
+            self.min_voltage = self.board.BATTERY_CONFIG['vbatmincellvoltage']*self.board.BATTERY_STATE['cellCount']
+            self.warn_voltage = self.board.BATTERY_CONFIG['vbatwarningcellvoltage']*self.board.BATTERY_STATE['cellCount']
+            self.max_voltage = self.board.BATTERY_CONFIG['vbatmaxcellvoltage']*self.board.BATTERY_STATE['cellCount']
+            self.voltage = self.board.ANALOG['voltage']
+
+
+    def tic(self):
+        return 'at %1.6f seconds' % (time.time() - start)
+        
+
+    async def main_msg_server(self, reader, writer):
+        """It will simply pass along the received messages from the client and ignore them if
+        the timestamp is newer than the previous ones. It will also send to the client the messages
+        received from the slow/main loops.
+        
+        The first value of every message is the timestamp. 
+        """
+        print("main_msg_server starting...")
+
+        prev_time = time.time()
+        prev_timestamp = 0
+        self.connected = 0
+        first_message = False
+        while not self.shutdown:
+            try:
+                data = await reader.read(1000*MSG_SIZE)
+            except ConnectionResetError:
+                break
+
+            curr_time = time.time()
+            if len(data):
+                data = data[-MSG_SIZE:]
+                main_message_in = np.frombuffer(data,dtype=np.float32)
+                if np.array_equal(self.handshake_message,main_message_in): # handshake
+                    print("Handshake received...")
+                    self.connected = curr_time
+                    # possible future clock synchronization, but because it's asynchronous... no guarantees.
+                    writer.write(np.asanyarray([curr_time], dtype=np.float32).tobytes())
+                    await writer.drain()
+                    first_message = True
+                    continue
+                elif self.connected:
+                    if first_message:
+                        prev_timestamp = curr_time
+                        first_message = False
+                        print("First message...", prev_timestamp)
+
+                    if (curr_time - prev_timestamp) < self.failsafe:
+                        # print("{} - Fast... {}".format(curr_time, (curr_time - prev_timestamp)))
+                        self.connected = curr_time
+                        prev_timestamp = curr_time #main_message_in[0]
+                        self.main_message_in = main_message_in[:]
+                        # Send back voltage level
+                        writer.write(np.asanyarray([self.voltage], dtype=np.float32).tobytes())
+                        # await writer.drain() # we don't care about this... so the comment
+                    else:
+                        print("Too slow...", (curr_time - prev_timestamp))
+                        prev_timestamp = curr_time # resets...
+
+            elif data == b'': # when the client closes
+                break
+                
+            print('{} ({:2.2f}us - {:2.2f}Hz) - main_msg_server'.format(self.tic(), 1e6*(time.time()-curr_time), 1/(curr_time-prev_time)))
+            prev_time = curr_time
+        
+        self.connected = 0 # indicates the connection was closed
+        print("main_msg_server closing...")
+
+
+    def analyze(self, a):
+        if not self.shutdown:
+            if self.lock_opticalflow.acquire(False):
+                try:
+                    self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y = self.filter.run(a)
+
+                    if (time.time()-self.prev_time)>= self.min_period:
+                        self.main_loop()
+                        self.prev_time = time.time()
+
+                finally:
+                    self.lock_opticalflow.release()
+
+
+    def main_loop(self):
+        """The main_loop is in charge of keeping things safe and keep the flight controller happy by
+        sending commands mimicking a remote controller receiver (minimum frequency or the FC will failsafe).
     
-    print("pid closing...")
+        0) Keeps the Flight Controller alive, but make sure it's disarmed.
+        """
+        if not self.connected:
+            # Using MSP controller it's possible to have more auxiliary inputs than this.
+            self.CMDS_init = {
+                    'roll':     1500,
+                    'pitch':    1500,
+                    'throttle': 1000,
+                    'yaw':      1500,
+                    'aux1':     1000, # DISARMED (1000) / ARMED (1800)
+                    'aux2':     1000, # ANGLE (1000) / HORIZON (1500) / FLIP (1800)
+                    'aux3':     1000, # FAILSAFE (1800)
+                    'aux4':     1000  # HEADFREE (1800)
+                    }
+
+            self.CMDS = self.CMDS_init.copy()
+
+        CMDS_ORDER = ['roll', 'pitch', 'throttle', 'yaw', 'aux1', 'aux2', 'aux3', 'aux4']
+
+        curr_time = time.time()
+        self.CMDS['roll'] = self.CMDS_init['roll']
+        self.CMDS['pitch'] = self.CMDS_init['pitch']
+        self.CMDS['yaw'] = self.CMDS_init['yaw']
+
+        if len(self.main_message_in):
+            self.CMDS['roll'] = self.main_message_in[1]
+            self.CMDS['pitch'] = self.main_message_in[2]
+
+            # # Voltage compensation
+            # if self.voltage and self.main_message_in[3]>1000:
+            #     # if the voltage is kept higher than 1000, it will not arm
+            #     CMDS['throttle'] = (BASE_VOLTAGE/self.voltage)*self.main_message_in[3]
+            #     # Here I could use an average value of the voltage to avoid crazy throttle variations
+            #     # as the battery voltage swings...
+            # else:
+            #     CMDS['throttle'] = self.main_message_in[3]
+
+            self.CMDS['throttle'] = self.main_message_in[3]
+            
+
+            self.CMDS['yaw'] = self.main_message_in[4]
+            self.CMDS['aux1'] = self.main_message_in[5]
+            self.CMDS['aux2'] = self.main_message_in[6]
+            self.CMDS['aux3'] = self.main_message_in[7]
+            self.CMDS['aux4'] = self.main_message_in[8]
+
+            # erases the previous message
+            self.main_message_in = []
+
+        if not self.connected:
+            self.CMDS['throttle'] = self.CMDS_init['throttle']
+            self.CMDS['aux1'] = self.CMDS_init['aux1'] # ARM / DISARM
+            self.CMDS['aux2'] = self.CMDS_init['aux2']
+            self.CMDS['aux3'] = self.CMDS_init['aux3']
+            self.CMDS['aux4'] = self.CMDS_init['aux4']
+
+        if self.board:
+            # The flight controller needs to receive a certain number of 
+            # messages before one can arm it. Therefore, when there's no connection,
+            # it will send the safe values
+            if not self.connected:
+                print("Keep connection to flight controller alive...")
+                # Send the RC channel values to the FC without checking anything
+                self.board.send_RAW_RC([self.CMDS[ki] for ki in CMDS_ORDER])
+                # Waits for the feedback from the FC to avoid overloading it
+                self.board.receive_msg()
+            else:
+                # When the client is connected, we want to make sure we only
+                # pass along messages if they respect the failsafe value leaving
+                # to the flight controller the task of actually activating its failsafe.
+                # self.connected has the time the previous message was received
+                if (curr_time - self.connected) < self.failsafe:
+                    # Send the RC channel values to the FC without checking anything
+                    self.board.send_RAW_RC([self.CMDS[ki] for ki in CMDS_ORDER])
+                    # Waits for the feedback from the FC only to avoid overloading it
+                    self.board.receive_msg()
+
+        print('{} ({:2.2f}us - {:2.2f}Hz) - main_loop'.format(self.tic(), 1e6*(time.time()-curr_time), 1/(curr_time-self.prev_time)))
+
+        # await asyncio.sleep(self.min_period) # using sleep(self.min_period), 
+        #                                      # to avoid overloading the flight controller
 
 
-async def ask_exit(signame, loop):
-    global shutdown
+    async def read_battery(self):
+        print("read_battery starting...")
 
-    print("Got signal %s: exit" % signame)
-    shutdown = True
-    await asyncio.sleep(0)
+        dataReady = False
+        while not self.shutdown:
+            if self.board:
+                if self.lock_opticalflow.acquire(False):
+                    try:
+                        if not dataReady:
+                            if self.board.send_RAW_msg(pyBetaflight.MSPCodes['MSP_ANALOG'], data=[]):
+                                dataHandler = self.board.receive_msg()
+                                dataReady = True
+                        else:
+                            self.board.process_recv_data(dataHandler)
+                            self.voltage = self.board.ANALOG['voltage']
+                            dataReady = False
+                    finally:
+                        self.lock_opticalflow.release()
 
-YAW_GAIN = 0
-Z_GAIN = 0
-Y_GAIN = 30
-X_GAIN = 30
+                if self.voltage <= self.min_voltage:
+                    print("LOW VOLTAGE")
+                    self.shutdown = True
 
-lock_opti = Lock()
+            await asyncio.sleep(1)
 
-optitrack_reading = {}
+        print("read_battery closing...")
 
-ioloop = asyncio.get_event_loop()
-tasks = [
-    main_msg_server(ioloop),
-    pid(lock_opti, optitrack_reading),
-    read_optitrack(lock_opti, optitrack_reading)
-]
+    async def use_opticalflow(self):
+        print("use_opticalflow starting...")
+        while not self.shutdown:
+            if self.lock_opticalflow.acquire(False):
+                try:
+                    dz_lc, dx_lc, dy_lc, gnd_x_lc, gnd_y_lc = self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y
+                finally:
+                    self.lock_opticalflow.release()
 
-for sig in ['SIGHUP','SIGINT', 'SIGTERM']:
-    ioloop.add_signal_handler(
-        getattr(signal, sig),
-        lambda s=sig: ioloop.create_task(ask_exit(s, ioloop)))
+            # print ("Up(1)/Donw(-1): %3f  |  dx = %3f  |  dy = %3f" % (dz, dx, dy))
+            print (gnd_x_lc, gnd_y_lc)
+            time.sleep(0.02)
+            await asyncio.sleep(self.min_period)
 
-ioloop.run_until_complete(asyncio.wait(tasks))
-ioloop.close()
+        print("use_opticalflow closing...")
+
+    async def ask_exit(self, signame, loop):
+        print("Got signal %s: exit" % signame)
+        self.shutdown = True
+        await asyncio.sleep(0)
+
+
+    async def main(self):
+        ioloop = asyncio.get_event_loop()
+
+        for sig in ['SIGHUP','SIGINT', 'SIGTERM']:
+            ioloop.add_signal_handler(
+                getattr(signal, sig),
+                lambda s=sig: ioloop.create_task(self.ask_exit(s, ioloop)))
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+
+        # Use asyncio.gather to run two coroutines concurrently (if possible):
+        await asyncio.gather(
+            self.use_opticalflow(),
+            self.read_battery(),
+            asyncio.start_server(self.main_msg_server, self.ip, self.port, loop=ioloop)
+        )
+
+
+    def run(self):
+        # ioloop = asyncio.get_event_loop()
+        ioloop = uvloop.new_event_loop()
+        asyncio.set_event_loop(ioloop)
+
+        server1 = asyncio.start_server(self.main_msg_server, self.ip, self.port, loop=ioloop)
+        tasks = [
+            server1,
+            ioloop.create_task(self.use_opticalflow()),
+            ioloop.create_task(self.read_battery())
+        ]
+
+        for sig in ['SIGHUP','SIGINT', 'SIGTERM']:
+            ioloop.add_signal_handler(
+                getattr(signal, sig),
+                lambda s=sig: ioloop.create_task(self.ask_exit(s, ioloop)))
+
+        ioloop.run_until_complete(asyncio.wait(tasks))
+        ioloop.close()
+
+if __name__ == '__main__':
+    with pyBetaflight(device="/dev/serial/by-id/usb-Betaflight_OmnibusF4_0x8000000-if00", loglevel='WARNING', baudrate=1000000) as board:
+        # board = None
+        print("read_cam starting...")
+        with picamera.PiCamera(resolution='VGA', framerate=60) as camera:
+            camera.resolution = (640,480)
+            with UI_server(camera, board, ip="192.168.2.124") as server:
+                camera.start_recording(
+                    os.devnull, format='h264', motion_output=server)
+
+                while True:
+                    camera.wait_recording(0)
+                    try:
+                        asyncio.run(server.main())
+                    except AttributeError:
+                        server.run()
+                    finally:
+                        camera.stop_recording()
+                        print("read_cam closing...")
+                        if board:
+                            board.reboot()
+                            time.sleep(1)
+
+                    # np.save('experiment', detector.data)
+                    # np.save('experiment_raw', detector.raw_data)
+                    # time.sleep(0.1)
