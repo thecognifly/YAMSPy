@@ -1,4 +1,6 @@
 '''
+Raspberry Pi Zero Optical Flow Fitler
+GestureDetector(PiMotionAnalysis)
 This program used SAD filter for filter the not usable data_
 The vertical movement is depending on the amount of x-axis vector
 Fitler send back
