@@ -16,21 +16,6 @@ import time
 from matplotlib import pyplot as plt
 from scipy import stats
 
-# /////////////////////////
-# >>> Import Data
-# /////////////////////////
-data = np.load('walk_sq.npy')
-data = data[340:1700]
-# data = np.load('walk.npy')
-# data = data[400:1280]
-# data = np.load('data_of.npy', allow_pickle=True)# import the raw data
-# data = data[700:950] # Only usable at 700-950
-# data = np.load('updown.npy')
-# data = data[200:310]
-# data = np.load('leftright.npy')
-# data = data[160:310]
-# data = np.load('leftright_angle.npy')
-# data = data[200:350]
 
 class Filter():
     def __init__(self):
@@ -222,12 +207,11 @@ class Filter():
         else:
             self.dy = 0
 
-    def run(self, data, j):
+    def run(self, data):
         # /////////////////////////
         # >>> Main Flow for filtering
         # /////////////////////////
         self.import_data(data)
-        self.update(j) # Renew the data
         self.sad_filter() # using k = 1.8 gain to lower the SAD limit. Default is 1.5
         if (self.vtl_filter()): # Return True if not vertical movement
             self.hrz_dir()
@@ -240,6 +224,7 @@ class Filter():
 
 # /////////////////////////
 # >>> Main
+# >>> Call Filter().run(data) when using this library
 # /////////////////////////
     def main(self, data, j):
         self.run(data, j)
