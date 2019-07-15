@@ -2,10 +2,11 @@
 This program used SAD filter for filter the not usable data_
 The vertical movement is depending on the amount of x-axis vector
 Fitler send back
-self.dx | self.dy -> Mean of the x-y direction movement
+self.dx | self.dy -> Mode_Median Filtering of the x-y direction movement
 self.dz -> UP (1) Down(-1) Hove(-1)
 self.gnd_x, self.gnd_y is ground truth in cm
->> 12 July 2019
+>> 14 July 2019
+>> @MistLab
 '''
 
 import numpy as np
@@ -14,6 +15,22 @@ import math
 import time
 from matplotlib import pyplot as plt
 from scipy import stats
+
+# /////////////////////////
+# >>> Import Data
+# /////////////////////////
+data = np.load('walk_sq.npy')
+data = data[340:1700]
+# data = np.load('walk.npy')
+# data = data[400:1280]
+# data = np.load('data_of.npy', allow_pickle=True)# import the raw data
+# data = data[700:950] # Only usable at 700-950
+# data = np.load('updown.npy')
+# data = data[200:310]
+# data = np.load('leftright.npy')
+# data = data[160:310]
+# data = np.load('leftright_angle.npy')
+# data = data[200:350]
 
 class Filter():
     def __init__(self):
@@ -171,6 +188,15 @@ class Filter():
         else:
             self.dz = 0
 
+    def mode_median(self, data, q1, mid, q3):
+        if (mid != q1 != q3):
+            a = np.where(data == q1)[0][0]  # First arrays of q1 in list
+            b = np.where(data == q3)[0][-1] # Last array of q3 in list
+            Data = np.mean(data[a:b])
+        else:
+            Data = mid
+        return Data
+
     def hrz_dir(self):
         # /////////////////////////
         # >>> Calc the detla x and y
@@ -180,15 +206,23 @@ class Filter():
         self.dy = (self.ten_cut_off((self.zero_filter(self.sort(self.twoD2oneD(self.y))))))
         self.dz = 0
         if len(self.dx)>self.DATA_THRESHOLD :
-            self.dx = self.dx.mean()
+            xmode = self.mode(self.dx)
+            x_q1 = self.dx[int(len(self.dx)/4)] # 25% of the data
+            medianx =  self.dx[int(len(self.dx)/2)] # Median of data
+            x_q3 = self.dx[int(3*(len(self.dx))/4)] # 75% of the data
+            self.dx = self.mode_median(self.dx, x_q1, medianx, x_q3)
         else:
-            self.dx = -1
+            self.dx = 0
         if len(self.dy)>self.DATA_THRESHOLD :
-            self.dy = self.dy.mean()
+            ymode = self.mode(self.dy)
+            y_q1 = self.dy[int(len(self.dy)/4)] # 25% of the data
+            mediany = self.dy[int(len(self.dy)/2)] # Median of data
+            y_q3 = self.dy[int(3*(len(self.dy))/4)] # 25% of the data
+            self.dy = self.mode_median(self.dy, y_q1, mediany, y_q3)
         else:
-            self.dy =-1
+            self.dy = 0
 
-    def run(self, data):
+    def run(self, data, j):
         # /////////////////////////
         # >>> Main Flow for filtering
         # /////////////////////////
@@ -208,7 +242,7 @@ class Filter():
 # >>> Main
 # /////////////////////////
     def main(self, data, j):
-        self.run(data)
+        self.run(data, j)
 
 filter = Filter()
 if __name__ == '__main__':
