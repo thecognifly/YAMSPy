@@ -119,11 +119,11 @@ class Filter():
         # >>> px displacement to ground displacement
         # >>> GND_DIS = PIXEL_SIZE * PX_DIS * altitude / FOCAL_LENGTH
         # /////////////////////////
-        if self.dx == -1 :
+        if self.dx == 0 :
             self.gnd_x = 0
         else:
             self.gnd_x = ((self.PIXEL_SIZE_CM * self.dx * self.altitude)/self.FOCAL_LENGTH_CM)*1.25 / 10
-        if self.dy == -1 :
+        if self.dy == 0 :
             self.gnd_y = 0
         else:
             self.gnd_y = ((self.PIXEL_SIZE_CM * self.dy * self.altitude)/self.FOCAL_LENGTH_CM)*1.25 / 10
