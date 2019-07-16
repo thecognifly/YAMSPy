@@ -18,7 +18,7 @@ import time
 
 class Filter():
     def __init__(self, vtl_threshold = 0.6, diff_threshold = 0.3,
-                       data_threshold = 150, altitude = 100):
+                       data_threshold = 150, altitude = 100, queue_size = 10):
         # # @ MIN_DATA is the minimum amount of data captured by optical flow
         # self.MIN_NUM_DATA = min_num_data
 
@@ -39,6 +39,13 @@ class Filter():
 
         # @ The altitude of the frame
         self.altitude = altitude # cm
+
+        # @ Queue Size
+        self.QUEUE_SIZE = queue_size
+
+        # @ The mean queue
+        self.x_queue = np.zeros(self.QUEUE_SIZE, dtype=np.float)
+        self.y_queue = np.zeros(self.QUEUE_SIZE, dtype=np.float)
 
         # @ The movement of the frame
         self.dx = self.dy = self.dz = 0
@@ -199,16 +206,24 @@ class Filter():
         else:
             self.dy = 0
 
-    def run(self, data):
+    def run(self, data, DoubleMean = False):
         # /////////////////////////
         # >>> Main Flow for filtering
         # /////////////////////////
         self.import_data(data)
-        self.sad_filter() # using k = 1.8 gain to lower the SAD limit. Default is 1.5
-        if (self.vtl_filter()): # Return True if not vertical movement
-            self.hrz_dir()
+        if DoubleMean:
+            self.x_queue[1:] = self.x_queue[:-1]
+            self.y_queue[1:] = self.y_queue[:-1]
+            self.x_queue[0] = self.x.mean()
+            self.y_queue[0] = self.y.mean()
+            # Calculate the mean of both queues
+            self.dx = self.x_queue.mean()
+            self.dy = self.y_queue.mean()
         else:
-            self.vtl_dir()
-        self.px2gnd()
-        
+            self.sad_filter() # using k = 1.8 gain to lower the SAD limit. Default is 1.5
+            if (self.vtl_filter()): # Return True if not vertical movement
+                self.hrz_dir()
+            else:
+                self.vtl_dir()
+        self.px2gnd()        
         return (self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y)
