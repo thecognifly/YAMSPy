@@ -17,25 +17,33 @@ import time
 
 
 class Filter():
-    def __init__(self):
-        # @ MIN_DATA is the minimum amount of data captured by optical flow
-        self.MIN_NUM_DATA = 20
+    def __init__(self, vtl_threshold = 0.6, diff_threshold = 0.3,
+                       data_threshold = 150, altitude = 100):
+        # # @ MIN_DATA is the minimum amount of data captured by optical flow
+        # self.MIN_NUM_DATA = min_num_data
+
         # @ the minimum precentage of the up and down vector different
-        self.VTL_THRESHOLD = 0.6
+        self.VTL_THRESHOLD = vtl_threshold
+
         # @ the minimum precentage of the pos and neg vector different
-        self.DIFF_THRESHOLD = 0.3
+        self.DIFF_THRESHOLD = diff_threshold
+
         # @ the minimum number of the usable data
-        self.DATA_THRESHOLD = 150
+        self.DATA_THRESHOLD = data_threshold
+
         # @ PIXEL SIZE of Pi camera
         self.PIXEL_SIZE_CM = (16*1.4) / 10000 # 1.4um 4x4 binning
+
         # @ Focal Length of Pi camera
         self.FOCAL_LENGTH_CM = 0.36 # 3.6mm
+
+        # @ The altitude of the frame
+        self.altitude = altitude # cm
+
         # @ The movement of the frame
-        self.dx = self.dy = 0
+        self.dx = self.dy = self.dz = 0
         # @ The ground truth
         self.gnd_x = self.gnd_y = 0
-        # @ The altitude of the frame
-        self.altitude = 100 # cm
 
 
     def import_data(self, data):
@@ -140,17 +148,20 @@ class Filter():
         data_ = ((self.x[:,int(((len(self.x[0,:]))/2)):]))
         x_1_ = len(data_[np.where(data_ < 0)[0]])
         x1_ = len(data_[np.where(data_ > 0)[0]])
-        if ((abs(x_1 - x1)/(x_1 + x1)) > self.DIFF_THRESHOLD and (abs(x_1_ - x1_)/(x_1_ + x1_)) > self.DIFF_THRESHOLD):
-            if ((abs(x_1 - x1)/(x_1 + x1)) > (abs(x_1_ - x1_)/(x_1_ + x1_))):
-                if (x_1 - x1) < 0 :
-                    self.dz = -1
+        if (x_1_ + x1_) > 0 and (x_1 + x1) > 0:
+            temp1 = abs(x_1 - x1)/(x_1 + x1)
+            temp2 = abs(x_1_ - x1_)/(x_1_ + x1_)
+            if  temp1 > self.DIFF_THRESHOLD and  temp2 > self.DIFF_THRESHOLD:
+                if temp1 > temp2:
+                    if (x_1 - x1) < 0 :
+                        self.dz = -1
+                    else:
+                        self.dz = 1
                 else:
-                    self.dz = 1
-            else:
-                if (x_1_ - x1_) < 0 :
-                    self.dz = 1
-                else:
-                    self.dz = -1
+                    if (x_1_ - x1_) < 0 :
+                        self.dz = 1
+                    else:
+                        self.dz = -1
         else:
             self.dz = 0
 
@@ -172,25 +183,19 @@ class Filter():
         self.dy = (self.ten_cut_off((self.zero_filter(self.sort(self.twoD2oneD(self.y))))))
         self.dz = 0
         if len(self.dx)>self.DATA_THRESHOLD :
-            xmode = self.mode(self.dx)
+            # xmode = self.mode(self.dx)
             x_q1 = self.dx[int(len(self.dx)/4)] # 25% of the data
             medianx =  self.dx[int(len(self.dx)/2)] # Median of data
             x_q3 = self.dx[int(3*(len(self.dx))/4)] # 75% of the data
-            if (xmode == medianx):
-                self.dx = self.mode_median(self.dx, x_q1, medianx, x_q3)
-            else:
-                self.dx = xmode
+            self.dx = self.mode_median(self.dx, x_q1, medianx, x_q3)
         else:
             self.dx = 0
         if len(self.dy)>self.DATA_THRESHOLD :
-            ymode = self.mode(self.dy)
+            # ymode = self.mode(self.dy)
             y_q1 = self.dy[int(len(self.dy)/4)] # 25% of the data
             mediany = self.dy[int(len(self.dy)/2)] # Median of data
-            y_q3 = self.dy[int(3*(len(self.dy))/4)] # 75% of the data
-            if (ymode == mediany):
-                self.dy = self.mode_median(self.dy, y_q1, mediany, y_q3)
-            else:
-                self.dy = ymode
+            y_q3 = self.dy[int(3*(len(self.dy))/4)] # 25% of the data
+            self.dy = self.mode_median(self.dy, y_q1, mediany, y_q3)
         else:
             self.dy = 0
 
@@ -205,5 +210,5 @@ class Filter():
         else:
             self.vtl_dir()
         self.px2gnd()
-
+        
         return (self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y)
