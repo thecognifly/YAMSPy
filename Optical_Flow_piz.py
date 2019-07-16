@@ -16,7 +16,6 @@ import os
 from matplotlib import pyplot as plt
 import picamera
 from picamera.array import PiMotionAnalysis, PiRGBArray
-from scipy import stats
 
 
 class GestureDetector(PiMotionAnalysis):
@@ -84,7 +83,8 @@ class Filter():
         # /////////////////////////
         # >>> Find the most frequenly data
         # /////////////////////////
-        return stats.mode(data)[0][0]
+        unique, counts = np.unique(data, return_counts=True)
+        return unique[np.argmax(counts)]
 
     def twoD2oneD(self, data): # This function only work on each frame. In real time, delect all the frame argument
         # /////////////////////////
@@ -207,15 +207,21 @@ class Filter():
             x_q1 = self.dx[int(len(self.dx)/4)] # 25% of the data
             medianx =  self.dx[int(len(self.dx)/2)] # Median of data
             x_q3 = self.dx[int(3*(len(self.dx))/4)] # 75% of the data
-            self.dx = self.mode_median(self.dx, x_q1, medianx, x_q3)
+            if (xmode == medianx):
+                self.dx = self.mode_median(self.dx, x_q1, medianx, x_q3)
+            else:
+                self.dx = xmode
         else:
             self.dx = 0
         if len(self.dy)>self.DATA_THRESHOLD :
             ymode = self.mode(self.dy)
             y_q1 = self.dy[int(len(self.dy)/4)] # 25% of the data
             mediany = self.dy[int(len(self.dy)/2)] # Median of data
-            y_q3 = self.dy[int(3*(len(self.dy))/4)] # 25% of the data
-            self.dy = self.mode_median(self.dy, y_q1, mediany, y_q3)
+            y_q3 = self.dy[int(3*(len(self.dy))/4)] # 75% of the data
+            if (ymode == mediany):
+                self.dy = self.mode_median(self.dy, y_q1, mediany, y_q3)
+            else:
+                self.dy = ymode
         else:
             self.dy = 0
 
