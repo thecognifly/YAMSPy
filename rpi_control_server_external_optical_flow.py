@@ -29,17 +29,21 @@ MSG_SIZE = 36
 start = time.time()
 
 
-class UI_server(PiMotionAnalysis):
-    QUEUE_SIZE = 10 # the number of consecutive frames to analyze
-    THRESHOLD = 4.0 # the minimum average motion required in either axis
+DEBUG = False
 
+
+class UI_server(PiMotionAnalysis):
     def __init__(self, camera, 
                        board = None, freq = 30,
                        failsafe = 0.1, 
                        ip = '127.0.0.1', port = 8989):
         
         super(UI_server, self).__init__(camera)
-        self.filter = Filter()
+
+        self.filter = Filter(vtl_threshold = 0.6, 
+                             diff_threshold = 0.3,
+                             data_threshold = 5, 
+                             altitude = 100)
 
         self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y = 0, 0, 0, 0, 0
 
@@ -67,6 +71,8 @@ class UI_server(PiMotionAnalysis):
         self.handshake_message[-1] = -1
 
         self.voltage = 0
+
+        self.CMDS_roll = self.CMDS_pitch = 0.0
 
         self.prev_time = 0
 
@@ -106,12 +112,13 @@ class UI_server(PiMotionAnalysis):
         first_message = False
         while not self.shutdown:
             try:
-                data = await reader.read(MSG_SIZE)
+                data = await reader.read(1000*MSG_SIZE)
             except ConnectionResetError:
                 break
 
             curr_time = time.time()
             if len(data):
+                data = data[-MSG_SIZE:]
                 main_message_in = np.frombuffer(data,dtype=np.float32)
                 if np.array_equal(self.handshake_message,main_message_in): # handshake
                     print("Handshake received...")
@@ -141,8 +148,8 @@ class UI_server(PiMotionAnalysis):
 
             elif data == b'': # when the client closes
                 break
-                
-            print('{} ({:2.2f}us - {:2.2f}Hz) - main_msg_server'.format(self.tic(), 1e6*(time.time()-curr_time), 1/(curr_time-prev_time)))
+            if DEBUG:
+                print('{} ({:2.2f}us - {:2.2f}Hz) - main_msg_server'.format(self.tic(), 1e6*(time.time()-curr_time), 1/(curr_time-prev_time)))
             prev_time = curr_time
         
         self.connected = 0 # indicates the connection was closed
@@ -154,16 +161,18 @@ class UI_server(PiMotionAnalysis):
             if self.lock_opticalflow.acquire(False):
                 try:
                     self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y = self.filter.run(a)
+                    # dy => -pitch
+                    # dx => +roll
 
                     if (time.time()-self.prev_time)>= self.min_period:
-                        self.main_loop()
+                        self.main_loop(optical_flow_corrections = (self.dz, self.dx, self.dy))
                         self.prev_time = time.time()
 
                 finally:
                     self.lock_opticalflow.release()
 
 
-    def main_loop(self):
+    def main_loop(self, optical_flow_corrections = (0,0,0)):
         """The main_loop is in charge of keeping things safe and keep the flight controller happy by
         sending commands mimicking a remote controller receiver (minimum frequency or the FC will failsafe).
     
@@ -223,12 +232,39 @@ class UI_server(PiMotionAnalysis):
             self.CMDS['aux3'] = self.CMDS_init['aux3']
             self.CMDS['aux4'] = self.CMDS_init['aux4']
 
+        # Apply optical flow corrections:
+        # dy => -pitch
+        # dx => +roll
+        OPTFLOW_THRS_Y = 10
+        OPTFLOW_THRS_X = 10
+
+        OPTFLOW_CORR_X = 30
+        OPTFLOW_CORR_Y = 30
+
+        OPTFLOW_ABSMAX_Y = 100
+        OPTFLOW_ABSMAX_X = 100
+
+        self.CMDS_pitch += +OPTFLOW_CORR_Y if optical_flow_corrections[2]>+OPTFLOW_THRS_Y else 0
+        self.CMDS_pitch += -OPTFLOW_CORR_Y if optical_flow_corrections[2]<-OPTFLOW_THRS_Y else 0 
+        self.CMDS_roll  += -OPTFLOW_CORR_X if optical_flow_corrections[1]>+OPTFLOW_THRS_X else 0
+        self.CMDS_roll  += +OPTFLOW_CORR_X if optical_flow_corrections[1]<-OPTFLOW_THRS_X else 0
+
+        if self.CMDS['aux1'] == self.CMDS_init['aux1'] or self.CMDS['throttle'] < 1550: # disarmed
+            self.CMDS_pitch = self.CMDS_roll = 0
+
+        self.CMDS_roll = self.CMDS_roll if abs(self.CMDS_roll) < OPTFLOW_ABSMAX_X else np.sign(self.CMDS_roll)*OPTFLOW_ABSMAX_X
+        self.CMDS_pitch = self.CMDS_pitch if abs(self.CMDS_pitch) < OPTFLOW_ABSMAX_Y else np.sign(self.CMDS_pitch)*OPTFLOW_ABSMAX_Y
+
+        self.CMDS['roll'] += self.CMDS_roll
+        self.CMDS['pitch'] += self.CMDS_pitch
+
+        
         if self.board:
             # The flight controller needs to receive a certain number of 
             # messages before one can arm it. Therefore, when there's no connection,
             # it will send the safe values
             if not self.connected:
-                print("Keep connection to flight controller alive...")
+                # print("Keep connection to flight controller alive...")
                 # Send the RC channel values to the FC without checking anything
                 self.board.send_RAW_RC([self.CMDS[ki] for ki in CMDS_ORDER])
                 # Waits for the feedback from the FC to avoid overloading it
@@ -244,7 +280,9 @@ class UI_server(PiMotionAnalysis):
                     # Waits for the feedback from the FC only to avoid overloading it
                     self.board.receive_msg()
 
-        print('{} ({:2.2f}us - {:2.2f}Hz) - main_loop'.format(self.tic(), 1e6*(time.time()-curr_time), 1/(curr_time-self.prev_time)))
+        # print(self.CMDS)
+        if DEBUG:
+            print('{} ({:2.2f}us - {:2.2f}Hz) - main_loop'.format(self.tic(), 1e6*(time.time()-curr_time), 1/(curr_time-self.prev_time)))
 
         # await asyncio.sleep(self.min_period) # using sleep(self.min_period), 
         #                                      # to avoid overloading the flight controller
@@ -288,7 +326,7 @@ class UI_server(PiMotionAnalysis):
 
             # print ("Up(1)/Donw(-1): %3f  |  dx = %3f  |  dy = %3f" % (dz, dx, dy))
             print (gnd_x_lc, gnd_y_lc)
-            time.sleep(0.01)
+            time.sleep(0.02)
             await asyncio.sleep(self.min_period)
 
         print("use_opticalflow closing...")
@@ -312,7 +350,7 @@ class UI_server(PiMotionAnalysis):
 
         # Use asyncio.gather to run two coroutines concurrently (if possible):
         await asyncio.gather(
-            self.use_opticalflow(),
+            # self.use_opticalflow(),
             self.read_battery(),
             asyncio.start_server(self.main_msg_server, self.ip, self.port, loop=ioloop)
         )
@@ -326,7 +364,7 @@ class UI_server(PiMotionAnalysis):
         server1 = asyncio.start_server(self.main_msg_server, self.ip, self.port, loop=ioloop)
         tasks = [
             server1,
-            ioloop.create_task(self.use_opticalflow()),
+            # ioloop.create_task(self.use_opticalflow()),
             ioloop.create_task(self.read_battery())
         ]
 
