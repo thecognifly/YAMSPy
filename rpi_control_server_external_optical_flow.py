@@ -75,7 +75,7 @@ class UI_server(PiMotionAnalysis):
         self.CMDS_roll = self.CMDS_pitch = 0.0
 
         self.prev_time = 0
-
+        self.OPTFLOW_FLAG = False
         # It's necessary to send some messages or the RX failsafe will be active
         # and it will not be possible to arm.
         command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
@@ -161,15 +161,17 @@ class UI_server(PiMotionAnalysis):
             if self.lock_opticalflow.acquire(False):
                 try:
                     self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y = self.filter.run(a)
+                    
                     # dy => -pitch
                     # dx => +roll
 
-                    if (time.time()-self.prev_time)>= self.min_period:
-                        self.main_loop(optical_flow_corrections = (self.dz, self.dx, self.dy))
-                        self.prev_time = time.time()
+                    # if (time.time()-self.prev_time)>= self.min_period:
+                    #     self.main_loop(optical_flow_corrections = (self.dz, self.dx, self.dy))
+                    #     self.prev_time = time.time()
 
                 finally:
                     self.lock_opticalflow.release()
+                    self.OPTFLOW_FLAG = True
 
 
     def main_loop(self, optical_flow_corrections = (0,0,0)):
@@ -243,7 +245,9 @@ class UI_server(PiMotionAnalysis):
 
         OPTFLOW_ABSMAX_Y = 100
         OPTFLOW_ABSMAX_X = 100
-
+        if self.OPTFLOW_FLAG:
+            optical_flow_corrections = (self.dz, self.dx, self.dy)
+            self.OPTFLOW_FLAG = False
         self.CMDS_pitch += +OPTFLOW_CORR_Y if optical_flow_corrections[2]>+OPTFLOW_THRS_Y else 0
         self.CMDS_pitch += -OPTFLOW_CORR_Y if optical_flow_corrections[2]<-OPTFLOW_THRS_Y else 0 
         self.CMDS_roll  += -OPTFLOW_CORR_X if optical_flow_corrections[1]>+OPTFLOW_THRS_X else 0
@@ -390,6 +394,7 @@ if __name__ == '__main__':
                     camera.wait_recording(0)
                     try:
                         asyncio.run(server.main())
+                        server.main_loop()
                     except AttributeError:
                         server.run()
                     finally:
