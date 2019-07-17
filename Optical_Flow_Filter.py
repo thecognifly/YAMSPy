@@ -7,7 +7,7 @@ Fitler send back
 self.dx | self.dy -> Mode_Median Filtering of the x-y direction movement
 self.dz -> UP (1) Down(-1) Hove(-1)
 self.gnd_x, self.gnd_y is ground truth in cm
->> 14 July 2019
+>> 17 July 2019
 >> @MistLab
 '''
 
@@ -17,6 +17,9 @@ import time
 
 
 class Filter():
+    '''
+    Raspberry Pi Zero Optical Flow Fitler
+    '''
     def __init__(self, vtl_threshold = 0.6, diff_threshold = 0.3,
                        data_threshold = 150, altitude = 100, queue_size = 10):
         # # @ MIN_DATA is the minimum amount of data captured by optical flow
@@ -54,61 +57,61 @@ class Filter():
 
 
     def import_data(self, data):
-        # /////////////////////////
+        '''
         # >>> Import Data
         # >>> data.[a:b] a = row, b = columns
-        # /////////////////////////
+        '''
         self.x = np.copy(data['x']) # using 640x480 resolution
         self.y = np.copy(data['y']) # 30 row, 41 columns
         self.sad = np.copy(data['sad']) # Sum of Absolute Difference >> hows the data reliable
 
     def update(self, j):
-        # /////////////////////////
+        '''
         # >>> Refresh the data, only act when using data base
-        # /////////////////////////
+        '''
         self.x = self.x[j]
         self.y = self.y[j]
         self.sad = self.sad[j]
 
     def ten_cut_off(self, data):
-        # /////////////////////////
+        '''
         # >>> remove 20% of the data from the begining and the end for remove outlier
-        # /////////////////////////
+        '''
         return data[ int((len(data))*0.1):int((len(data))*(0.9))]
 
     def sort(self, data): # Rearrange of order of the sample
-        # /////////////////////////
+        '''
         # >>> Sort the data set
-        # /////////////////////////
+        '''
         return np.sort(data)
 
     def mode(self, data):
-        # /////////////////////////
+        '''
         # >>> Find the most frequenly data
-        # /////////////////////////
+        '''
         # return stats.mode(data)[0][0]
         unique, counts = np.unique(data, return_counts=True)
         return unique[np.argmax(counts)]
 
     def twoD2oneD(self, data): # This function only work on each frame. In real time, delect all the frame argument
-        # /////////////////////////
+        '''
         # >>> Creating 1D array for x and y instead of 2D
-        # /////////////////////////
+        '''
         return data.ravel()
 
     def sad_filter (self, k = 1.5): # This function only work on each frame. In real time, delect all the frame argument
-        # /////////////////////////
+        '''
         # >>> Setting SAD Filter # Using the average sad value of each set
-        # /////////////////////////
+        '''
         sad_threshold = np.mean(self.sad) * k # smaller the sad value, the better of data. k is use to reduce the limit
         sad_filter = np.where(self.sad>sad_threshold) # sad_filter is mean the data not reliable
         self.x[sad_filter] = 0                        # therefore, set those data to zero.
         self.y[sad_filter] = 0
 
     def vtl_filter(self):
-        # /////////////////////////
+        '''
         # >>> Finding the different of abs x and abs y
-        # /////////////////////////
+        '''
         x_1 = len(self.x[np.where(self.x < 0)[0]])
         # x0 = len(self.x[np.where(self.x == 0)[0]])
         x1 = len(self.x[np.where(self.x > 0)[0]])
@@ -124,16 +127,16 @@ class Filter():
             return True
 
     def zero_filter(self, data):
-        # /////////////////////////
+        '''
         # >>> Filter out too zero vector
-        # /////////////////////////
+        '''
         return (data[(np.where(data!= 0)[0])]) # return nonzero data
 
     def px2gnd(self):
-        # /////////////////////////
+        '''
         # >>> px displacement to ground displacement
         # >>> GND_DIS = PIXEL_SIZE * PX_DIS * altitude / FOCAL_LENGTH
-        # /////////////////////////
+        '''
         if self.dx == 0 :
             self.gnd_x = 0
         else:
@@ -144,10 +147,10 @@ class Filter():
             self.gnd_y = ((self.PIXEL_SIZE_CM * self.dy * self.altitude)/self.FOCAL_LENGTH_CM)*1.25 / 10
 
     def vtl_dir(self):
-        # /////////////////////////
+        '''
         # >>> Dectect the left side of the frame
         # >>> Return -1 = Down , Return 1 = Up
-        # /////////////////////////
+        '''
         self.dx = self.dy = 0
         data = ((self.x[:,:int(((len(self.x[0,:]))/2))]))
         x_1 = len(data[np.where(data < 0)[0]])
@@ -173,6 +176,10 @@ class Filter():
             self.dz = 0
 
     def mode_median(self, data, q1, mid, q3):
+        '''
+        # Checking the median isn't the most populated value with q1 q3
+        # If not, take mean at with q1 and q3
+        '''
         if (mid != q1 != q3):
             a = np.where(data == q1)[0][0]  # First arrays of q1 in list
             b = np.where(data == q3)[0][-1] # Last array of q3 in list
@@ -182,9 +189,9 @@ class Filter():
         return Data
 
     def hrz_dir(self):
-        # /////////////////////////
+        '''
         # >>> Calc the detla x and y
-        # /////////////////////////
+        '''
         # Covert and sort the data to 1D, remove the outlier and take mean
         self.dx = (self.ten_cut_off((self.zero_filter(self.sort(self.twoD2oneD(self.x))))))
         self.dy = (self.ten_cut_off((self.zero_filter(self.sort(self.twoD2oneD(self.y))))))
@@ -207,9 +214,10 @@ class Filter():
             self.dy = 0
 
     def run(self, data, DoubleMean = False):
-        # /////////////////////////
+        '''
         # >>> Main Flow for filtering
-        # /////////////////////////
+        # >>> Using Double Mean just set it True
+        '''
         self.import_data(data)
         if DoubleMean:
             self.x_queue[1:] = self.x_queue[:-1]
