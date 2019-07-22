@@ -174,7 +174,8 @@ class UI_server(PiMotionAnalysis):
                     self.OPTFLOW_FLAG = True
 
 
-    def main_loop(self, optical_flow_corrections = (0,0,0)):
+    # def main_loop(self, optical_flow_corrections = (0,0,0)):
+    def main_loop(self):
         """The main_loop is in charge of keeping things safe and keep the flight controller happy by
         sending commands mimicking a remote controller receiver (minimum frequency or the FC will failsafe).
     
@@ -237,14 +238,14 @@ class UI_server(PiMotionAnalysis):
         # Apply optical flow corrections:
         # dy => -pitch
         # dx => +roll
-        OPTFLOW_THRS_Y = 10
-        OPTFLOW_THRS_X = 10
+        OPTFLOW_THRS_Y = 2
+        OPTFLOW_THRS_X = 2
 
         OPTFLOW_CORR_X = 30
         OPTFLOW_CORR_Y = 30
 
-        OPTFLOW_ABSMAX_Y = 100
-        OPTFLOW_ABSMAX_X = 100
+        OPTFLOW_ABSMAX_Y = 120
+        OPTFLOW_ABSMAX_X = 120
         if self.OPTFLOW_FLAG:
             optical_flow_corrections = (self.dz, self.dx, self.dy)
             self.OPTFLOW_FLAG = False
