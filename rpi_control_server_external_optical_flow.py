@@ -14,7 +14,7 @@ import numpy as np
 
 import uvloop
 
-from betaflightmspy import simpleUI
+from betaflightmspy import MSPy
 
 import picamera
 from picamera.array import PiMotionAnalysis, PiRGBArray
@@ -83,7 +83,7 @@ class UI_server(PiMotionAnalysis):
                         'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES', 'MSP_ANALOG']
         if self.board:
             for msg in command_list: 
-                if self.board.send_RAW_msg(pyBetaflight.MSPCodes[msg], data=[]):
+                if self.board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                     dataHandler = self.board.receive_msg()
                     self.board.process_recv_data(dataHandler)
 
@@ -160,7 +160,7 @@ class UI_server(PiMotionAnalysis):
         if not self.shutdown:
             if self.lock_opticalflow.acquire(False):
                 try:
-                    self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y = self.filter.run(a)
+                    self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y = self.filter.run(a, DoubleMean = True)
                     
                     # dy => -pitch
                     # dx => +roll
@@ -248,6 +248,8 @@ class UI_server(PiMotionAnalysis):
         OPTFLOW_ABSMAX_X = 120
         if self.OPTFLOW_FLAG:
             optical_flow_corrections = (self.dz, self.dx, self.dy)
+            self.gnd_x += self.dx
+            self.gnd_y += self.dy
             self.OPTFLOW_FLAG = False
         self.CMDS_pitch += +OPTFLOW_CORR_Y if optical_flow_corrections[2]>+OPTFLOW_THRS_Y else 0
         self.CMDS_pitch += -OPTFLOW_CORR_Y if optical_flow_corrections[2]<-OPTFLOW_THRS_Y else 0 
@@ -302,7 +304,7 @@ class UI_server(PiMotionAnalysis):
                 if self.lock_opticalflow.acquire(False):
                     try:
                         if not dataReady:
-                            if self.board.send_RAW_msg(pyBetaflight.MSPCodes['MSP_ANALOG'], data=[]):
+                            if self.board.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'], data=[]):
                                 dataHandler = self.board.receive_msg()
                                 dataReady = True
                         else:
@@ -319,22 +321,6 @@ class UI_server(PiMotionAnalysis):
             await asyncio.sleep(1)
 
         print("read_battery closing...")
-
-    async def use_opticalflow(self):
-        print("use_opticalflow starting...")
-        while not self.shutdown:
-            if self.lock_opticalflow.acquire(False):
-                try:
-                    dz_lc, dx_lc, dy_lc, gnd_x_lc, gnd_y_lc = self.dz, self.dx, self.dy, self.gnd_x, self.gnd_y
-                finally:
-                    self.lock_opticalflow.release()
-
-            # print ("Up(1)/Donw(-1): %3f  |  dx = %3f  |  dy = %3f" % (dz, dx, dy))
-            print (gnd_x_lc, gnd_y_lc)
-            time.sleep(0.02)
-            await asyncio.sleep(self.min_period)
-
-        print("use_opticalflow closing...")
 
     async def ask_exit(self, signame, loop):
         print("Got signal %s: exit" % signame)
@@ -355,7 +341,6 @@ class UI_server(PiMotionAnalysis):
 
         # Use asyncio.gather to run two coroutines concurrently (if possible):
         await asyncio.gather(
-            # self.use_opticalflow(),
             self.read_battery(),
             asyncio.start_server(self.main_msg_server, self.ip, self.port, loop=ioloop)
         )
@@ -382,7 +367,7 @@ class UI_server(PiMotionAnalysis):
         ioloop.close()
 
 if __name__ == '__main__':
-    with pyBetaflight(device="/dev/serial/by-id/usb-Betaflight_OmnibusF4_0x8000000-if00", loglevel='WARNING', baudrate=1000000) as board:
+    with MSPy(device="/dev/serial/by-id/usb-Betaflight_OmnibusF4_0x8000000-if00", loglevel='WARNING', baudrate=1000000) as board:
         # board = None
         print("read_cam starting...")
         with picamera.PiCamera(resolution='VGA', framerate=60) as camera:
