@@ -14,7 +14,7 @@ import numpy as np
 
 import uvloop
 
-from pybetaflight import pyBetaflight
+from betaflightmspy import simpleUI
 
 import picamera
 from picamera.array import PiMotionAnalysis, PiRGBArray
