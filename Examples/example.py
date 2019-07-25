@@ -1,4 +1,4 @@
-"""simpleUI.py: Simple UI (toy one really) to test MSPy using a SSH connection.
+"""example.py: Just an example of how to use BetaflightMSPy.
 
 Copyright (C) 2019 Ricardo de Azambuja
 
