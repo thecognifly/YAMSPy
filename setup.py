@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 setup(
     name="BetaflightMSPy",
     version="0.1",
-    packages=find_packages(),
+    packages=['betaflightmspy'],
     install_requires=['pyserial'],
 
     # metadata to display on PyPI
