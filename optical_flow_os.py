@@ -7,6 +7,7 @@ import time
 import signal
 import select
 import numpy as np
+from multiprocessing import Pool, Process, Pipe
 
 class Video():
     '''
@@ -20,7 +21,7 @@ class Video():
         self.resolution = (frameWidth, frameHeight)
         self.framerate = frameRate
         self.contrast = contrast
-
+        self.pipe_A, self.pipe_B = Pipe()
     def run(self):
         '''
         Run the Pi motion feedback, with defalut 10Hz
