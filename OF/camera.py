@@ -6,9 +6,12 @@ class Camera():
     '''
     This class is going to lauch the picamera
     '''
-    def __init__(self, frameWidth=240, 
+    def __init__(self,  pipe_of,
+                        pipe_cv,
+                        frameWidth=240, 
                         frameHeight=240,
                         frameRate=20,
+
                         DEBUG = False):
         '''
         Request frameWidth, frameHeight, frameRate
@@ -19,8 +22,8 @@ class Camera():
         self.framerate = frameRate
         self.contrast = 42
         # @ The Pipe for feeding the motion data and opencv data
-        self.pipe_read_of, self.pipe_write_of = Pipe()
-        self.pipe_read_cv, self.pipe_write_cv = Pipe()
+        self.pipe_read_of, self.pipe_write_of = pipe_of
+        self.pipe_read_cv, self.pipe_write_cv = pipe_cv
 
         # @ For Debug use
         self.DEBUG = DEBUG
@@ -50,14 +53,6 @@ class Camera():
                     camera.stop_recording(splitter_port=1)
                     camera.stop_recording(splitter_port=2)
 
-    def read_motion(self):
-        if self.pipe_read_of.poll():
-            return (self.pipe_read_of.recv())
-        else:
-            return None
-
-    def read_cv(self):
-        if self.pipe_read_cv.poll():
-            return (self.pipe_read_cv.recv())
-        else:
-            return None
+# The value return in pipe read end
+# if pipe_read.poll():
+#     return (self.pipe_read.recv())
