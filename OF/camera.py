@@ -1,6 +1,10 @@
-import picamera
-from Analyze import Flow, Poss
+import os
 from multiprocessing import Pool, Process, Pipe
+
+import picamera
+
+from analyze_camera import Flow, Poss
+
 
 class Camera():
     '''
@@ -29,11 +33,14 @@ class Camera():
         self.DEBUG = DEBUG
        
     
-    def run(self):
+    def run(self, nice_level):
         '''
         Launch the camera start streaming
         Having Pipe for write and read
         '''
+        
+        os.nice(nice_level)
+
         # @ Set the picamera parameter
         camera = picamera.PiCamera()
         camera.resolution = (self.width, self.height)
