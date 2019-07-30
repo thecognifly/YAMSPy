@@ -8,7 +8,8 @@ class Camera():
     '''
     def __init__(self, frameWidth=240, 
                         frameHeight=240,
-                        frameRate=20):
+                        frameRate=20,
+                        DEBUG = False):
         '''
         Request frameWidth, frameHeight, frameRate
         '''
@@ -17,8 +18,12 @@ class Camera():
         self.height = frameHeight
         self.framerate = frameRate
         self.contrast = 42
-        # @ The Pipe for feeding the motion data
-        self.pipe_read, self.pipe_write = Pipe()
+        # @ The Pipe for feeding the motion data and opencv data
+        self.pipe_read_of, self.pipe_write_of = Pipe()
+        self.pipe_read_cv, self.pipe_write_cv = Pipe()
+
+        # @ For Debug use
+        self.DEBUG = DEBUG
        
     
     def run(self):
@@ -32,8 +37,8 @@ class Camera():
         camera.framerate = self.framerate
         camera.contrast = self.contrast
         # Start the video process
-        with Poss(frameWidth=self.width,frameHeight=self.height) as poss:
-            with Flow(self.pipe_read, self.pipe_write, frameWidth=self.width,frameHeight=self.height) as flow:
+        with Poss(self.pipe_read_cv, self.pipe_write_cv,frameWidth=self.width,frameHeight=self.height, DEBUG = self.DEBUG) as poss:
+            with Flow(self.pipe_read_of, self.pipe_write_of, frameWidth=self.width,frameHeight=self.height, DEBUG = self.DEBUG) as flow:
                 camera.start_recording(poss, format='bgr', splitter_port = 1)
                 camera.start_recording("/dev/null", format='h264', splitter_port=2, motion_output=flow)
                 try:
@@ -46,8 +51,13 @@ class Camera():
                     camera.stop_recording(splitter_port=2)
 
     def read_motion(self):
-        # return (self.pipe_read.recv())
-        if self.pipe_read.poll():
-            return (self.pipe_read.recv())
+        if self.pipe_read_of.poll():
+            return (self.pipe_read_of.recv())
+        else:
+            return None
+
+    def read_cv(self):
+        if self.pipe_read_cv.poll():
+            return (self.pipe_read_cv.recv())
         else:
             return None
