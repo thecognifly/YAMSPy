@@ -11,10 +11,14 @@ class Flow(io.IOBase):
 
     def __init__(self, pipe_read, pipe_write,
                     frameWidth=240, frameHeight=240,
-                    altitude = 100 #cm
+                    altitude = 100, #cm
+                    DEBUG = False
                     ):
         # @ Init the io.IOBase
         super(__class__, self).__init__()
+
+        # @ For Debug use
+        self.DEBUG = DEBUG
 
         # @ Set the video frame parameter
         self.frameWidth = frameWidth
@@ -49,7 +53,8 @@ class Flow(io.IOBase):
         Act like a file-like class
         '''
         # Config the size of the numpy array
-        start = time.time()
+        if self.DEBUG:
+            start = time.time()
         if self.cols is None:
             self.cols = ((self.frameWidth + 15) // 16) + 1
             self.rows = (self.frameHeight + 15) // 16
@@ -62,21 +67,30 @@ class Flow(io.IOBase):
             x_motion = 0 if abs(x_motion) < 0.1 else x_motion
             y_motion = 0 if abs(y_motion) < 0.1 else y_motion
             self.pipe_write.send((x_motion, y_motion))
-        print("FLOW - Running at %2.2f Hz"%(1/(time.time()-start)))
+        if self.DEBUG:
+            print("FLOW - Running at %2.2f Hz"%(1/(time.time()-start)))
         return  len(b)      
 
 class Poss(io.IOBase):
     '''
     Using Opencv estimateRigidTransform to calc the position.
     '''
-    def __init__(self, frameWidth=240, frameHeight=240
-                    ):
+    def __init__(self, pipe_read, pipe_write,
+                    frameWidth=240, frameHeight=240,
+                    DEBUG = False):
         # @ Init the io.IOBase
         super(__class__, self).__init__()
+
+        # @ For Debug use
+        self.DEBUG = DEBUG
 
         # @ Set the video frame parameter
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
+
+        # @ The Pipe for feeding the motion data
+        self.pipe_read = pipe_read
+        self.pipe_write = pipe_write
 
         # @ Set the opencv parameter
         self.flag_1 = True
@@ -148,7 +162,8 @@ class Poss(io.IOBase):
         '''
         Act like a file-like class
         '''
-        start = time.time()
+        if self.DEBUG:
+            start = time.time()
         # b is the numpy array of the image, 3 bytes of color depth
         img = np.reshape(np.fromstring(b, dtype=np.uint8), (self.frameHeight, self.frameWidth, 3))
         M = np.float32([[1,0,100],[0,1,100]])
@@ -161,14 +176,16 @@ class Poss(io.IOBase):
             # Finding the feature inside the frame
             # First image is Query Image
             # Second image is Train Image
-            try:
-                # Caputre feature
-                kq, dq = self.fea_det.detectAndCompute(self.imgNow, None) 
-                kt, dt = self.fea_det.detectAndCompute(img, None)
-                x_pos, y_pos = self.BF_filter(kt, dt, kq, dq)
-                # print(x_pos, y_pos)
-                self.imgNow = img
-            except:
-                pass
-        print("POSS - Running at %2.2f Hz"%(1/(time.time()-start)))
+            if not self.pipe_read.poll(): 
+                try:
+                    # Caputre feature
+                    kq, dq = self.fea_det.detectAndCompute(self.imgNow, None) 
+                    kt, dt = self.fea_det.detectAndCompute(img, None)
+                    self.pipe_write.send(self.BF_filter(kt, dt, kq, dq))
+                    self.imgNow = img
+                except:
+                    pass
+        if self.DEBUG:
+            print("POSS - Running at %2.2f Hz"%(1/(time.time()-start)))
+        return len(b)
 
