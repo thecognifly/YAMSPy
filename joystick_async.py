@@ -30,6 +30,8 @@ import asyncio
 import time
 import signal
 from collections import deque
+from multiprocessing import Process, Pipe
+import os
 
 # pip install uvloop
 import uvloop
@@ -40,6 +42,11 @@ from evdev import InputDevice, ecodes, ff
 
 # pip3 install git+https://github.com/ricardodeazambuja/BetaflightMSPy.git
 from betaflightmspy import MSPy
+
+
+from camera import Camera
+
+import control_node
 
 """
 $ sudo find /. -name "evtest.py"
@@ -80,6 +87,10 @@ shutdown = False
 fc_reboot = False
 
 board = None
+
+voltage = None
+
+min_voltage = None
 
 # Setup for the vibration
 rumble = ff.Rumble(strong_magnitude=0x0000, weak_magnitude=0xffff)
@@ -140,29 +151,27 @@ async def joystick_client(dev, pipe = None):
                         fc_reboot = True
 
                 if event.type == 3:
+                    if event.code == 1:
+                        # UP / DOWN: code 01 val from 255 (down) to 0 (up)
+                        CMDS['throttle'] = 1000+1000*(255-event.value)/255 # LEFT up / down
+                    if event.code == 0:
+                        # LEFT / RIGHT: code 00 val from 0 (left) to 255 (right)
+                        CMDS['yaw'] = 1000+1000*event.value/255 # LEFT left / right
+
                     if (not autonomous): # it will not read values if:
                                          # - it's AUTONOMOUS MODE
-                        if event.code == 1:
-                            # UP / DOWN: code 01 val from 255 (down) to 0 (up)
-                            CMDS['throttle'] = 1000+1000*(255-event.value)/255 # LEFT up / down
-                        if event.code == 0:
-                            # LEFT / RIGHT: code 00 val from 0 (left) to 255 (right)
-                            CMDS['yaw'] = 1000+1000*event.value/255 # LEFT left / right
-                            pass
                         if event.code == 4:
                             # UP / DOWN: code 04 val from 255 (down) to 0 (up)
                             CMDS['pitch'] = 1000+1000*(255-event.value)/255 # RIGHT up / down
                         if event.code == 3:
                             # LEFT / RIGHT: code 00 val from 0 (left) to 255 (right)
                             CMDS['roll'] = 1000+1000*event.value/255 # RIGHT left / right
-                    elif pipe:                         
+                    elif pipe: 
                         # process info from pipe
                         if pipe.poll():
                             cmds_pipe = pipe.recv()
-                            CMDS['throttle'] = cmds_pipe['throttle']
-                            CMDS['yaw'] = cmds_pipe['yaw']
-                            CMDS['pitch'] = cmds_pipe['pitch']
-                            CMDS['roll'] = cmds_pipe['roll']
+                            CMDS['pitch'] = CMDS_init['pitch'] + cmds_pipe['pitch']
+                            CMDS['roll'] = CMDS_init['roll'] + cmds_pipe['roll']
 
                     # Both, L2 and R2 need to be fully pressed to reboot
                     if event.code == 2: # L2 - FULLY PRESSED => REBOOT
@@ -180,6 +189,7 @@ async def joystick_client(dev, pipe = None):
                     if event.value == 1:
                         if event.code == 311:
                             CMDS['aux1'] = 1000 # R1 - DISARM
+                            autonomous = False
                             print('DISarming...')
                             dev.write(ecodes.EV_FF, effect_id, 2)
                         if event.code == 310:
@@ -254,7 +264,7 @@ async def print_values():
 
     prev_time = time.time()
     while not shutdown:
-        print("{0}Hz : {1}".format(1/(time.time()-prev_time), [CMDS[cmd] for cmd in CMDS_ORDER]))
+        print("{0}Hz | {2}V ({3}V) : {1}".format(1/(time.time()-prev_time), [CMDS[cmd] for cmd in CMDS_ORDER], voltage, min_voltage))
         prev_time = time.time()
         await asyncio.sleep(1/PRINT_FREQ)
 
@@ -264,7 +274,7 @@ async def print_values():
 async def read_voltage_from_fc(dev):
     print("read_voltage_from_fc started...")
 
-    voltage = 0
+    global voltage, min_voltage
 
     # It's necessary to send some messages or the RX failsafe will be active
     # and it will not be possible to arm.
@@ -367,4 +377,50 @@ def run_loop(pipe = None):
     ioloop.close()
 
 if __name__ == '__main__':
-    run_loop()
+
+    os.nice(-10) # this process has the highest priority
+
+    loop_pipe_in, loop_pipe_out = Pipe()
+    control_optflow_pipe_in, control_optflow_pipe_out = Pipe()
+    control_cv_pipe_in, control_cv_pipe_out = Pipe()
+    
+    
+    #
+    # Launch all processes
+    #
+    # - Control_node(opticalflow) => Main_node
+    # - OpticalFlow_node(camera) => Control_node
+
+    # nice_level > -10
+    # control_pipe_in: receive velocities from opticalflow
+    # loop_pipe_out: write throttle, yaw, roll and pitch to main node.
+    nice_level_control = 10
+    control_process = Process(target=control_node.control_process, 
+                              args=(control_optflow_pipe_in, 
+                                    control_cv_pipe_in,
+                                    loop_pipe_in, 
+                                    nice_level_control))
+    
+    # nice_level > nice_level_control_node
+    # control_pipe_out: write velocities to control node
+    # opticalflow_process = Process(target=opticalflow_node, args=(control_pipe_out, nice_level))
+    camera = Camera((control_optflow_pipe_in, control_optflow_pipe_out),
+                    (control_cv_pipe_in, control_cv_pipe_out),
+                    frameWidth=240,
+                    frameHeight=240,
+                    frameRate = 30,
+                    DEBUG=False)
+    nice_level_cam = 10
+    camera_process = Process(target=camera.run, args=(nice_level_cam,))
+
+
+    
+    camera_process.start()
+    control_process.start()
+    
+    try:
+        run_loop(loop_pipe_out)
+    
+    finally:
+        camera_process.terminate()
+        control_process.terminate()
