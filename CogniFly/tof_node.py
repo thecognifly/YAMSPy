@@ -33,7 +33,7 @@ class ToF():
                     if distance > 0:
                         # print("%d mm, %d cm" % (distance, (distance/10)))
                         self.pipe_write.send(distance) # in mm
-                    time.sleep(self.timing/1000000.00)
+                time.sleep(self.timing/1000000.00)
 
         finally:
             self.tof.stop_ranging()
