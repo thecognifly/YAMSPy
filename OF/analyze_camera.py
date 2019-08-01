@@ -93,7 +93,7 @@ class Poss(io.IOBase):
         self.pipe_write = pipe_write
 
         # @ Set the opencv parameter
-        self.flag_1 = True
+        self.flag_fi = True # Capture the first  frame
         self.imgPost = self.imgNow = None
         algorithms = {'ORB':  cv2.ORB_create,
                       'SIFT': cv2.xfeatures2d.SIFT_create,
@@ -102,53 +102,60 @@ class Poss(io.IOBase):
                       'BRIEF':cv2.xfeatures2d.BriefDescriptorExtractor_create}
         algorithm2use = 'ORB' # 'BRIEF', 'FAST', 'ORB', 'SURF', 'SIFT'
         number_of_features = 50 # Limited in 50
-        self.fea_det = algorithms[algorithm2use](number_of_features)
-        # Set FLANN parameters 
-        FLANN_INDEX_LSH = 6
-        index_params= dict(algorithm = FLANN_INDEX_LSH,
-                        table_number = 6, # 12
-                        key_size = 12,     # 20
-                        multi_probe_level = 1) #2
-        search_params = dict(checks=50)
-        self.flann = cv2.FlannBasedMatcher(index_params,search_params)
-        
+        self.fea_det = algorithms[algorithm2use](number_of_features)       
 
     def img2kpt(self, img):
         '''
         Find all the keypoint inside the image
         '''
         kpts, des = self.fea_det.detectAndCompute(img, None)
-        return (kpts, des)
-
-    def flann_filter(self, kt, dt, kq, dq):
-        '''
-        Using flann_filter
-        '''
-        matches = self.flann.knnMatch(dq, dt, k=2)
-        matchesMask = [[0,0] for i in range(len(matches)) if len(matches[i])>1]
-        filtered_matches = []
-        # ratio test as per Lowe's paper
-        for i,mn in enumerate(matches):
-            if len(mn)>1:
-                m = mn[0]
-                n = mn[1]
-                if m.distance < 0.7*n.distance:
-                    matchesMask[i]=[1,0]
-                    filtered_matches.append(i)
-       
+        return (kpts, des)       
 
     def BF_filter(self, kt, dt, kq, dq):
         '''
         This function is using Brute-Force to calc the displacement different 
-        return x_diff, y_diff
+        calc triangle different between two frame can know the altitude change
+        and calc the position drift
+        return (drift_pos, area_diff)
         '''
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         matches = bf.match(dq,dt)
-        if (len(matches)) > 5 :
+        if (len(matches)) > 3 :
             matches = sorted(matches, key = lambda x:x.distance)
-            img1_pos = (kq[matches[0].queryIdx].pt)
-            img2_pos = (kt[matches[0].trainIdx].pt)
-            return ((img2_pos[0]-img1_pos[0]), (img2_pos[1]-img1_pos[1]))
+            ctn = 0
+            for m in matches:
+                if m.distance <= 38 : # if the match distance larger than 38
+                    ctn+=1            # Normally is not match correctly
+                else:
+                    break # stop the loop for faster loop
+            
+            if ctn > 3: # At least 3 points for calc triangle 
+                # >> having a numpy array for faster calc
+                # numpy array [x, y], [x, y], [x, y]
+                pt_pre = np.array([[kq[matches[0].queryIdx].pt[0], kq[matches[0].queryIdx].pt[1]],
+                                [kq[matches[1].queryIdx].pt[0], kq[matches[1].queryIdx].pt[1]],
+                                [kq[matches[2].queryIdx].pt[0], kq[matches[2].queryIdx].pt[1]]])
+
+                pt_now = np.array([[kt[matches[0].trainIdx].pt[0], kt[matches[0].trainIdx].pt[1]],
+                                [kt[matches[1].trainIdx].pt[0], kt[matches[1].trainIdx].pt[1]],
+                                [kt[matches[2].trainIdx].pt[0], kt[matches[2].trainIdx].pt[1]]])
+                # >>> drift_pos = [drift_x, drift_y]
+                drift_pos = ((np.sum((pt_pre-pt_now), axis=0))/3)
+                # >>> length = [a, b, c]
+                length_pre = np.array([ (np.sqrt(np.sum((pt_pre[0]-pt_pre[1])**2))),
+                                        (np.sqrt(np.sum((pt_pre[1]-pt_pre[2])**2))),
+                                        (np.sqrt(np.sum((pt_pre[2]-pt_pre[0])**2)))])
+
+                length_now = np.array([ (np.sqrt(np.sum((pt_now[0]-pt_now[1])**2))),
+                                        (np.sqrt(np.sum((pt_now[1]-pt_now[2])**2))),
+                                        (np.sqrt(np.sum((pt_now[2]-pt_now[0])**2)))])
+                # Heron's Flormula
+                # Area = sqrt (s*(s-a)*(s-b)*(s-c))
+                s_pre = (np.sum(length_pre))/2
+                s_now = (np.sum(length_now))/2
+                # area_diff = area_now - area_pre
+                area_diff= np.sqrt(s_now*np.prod(s_now-length_now)) - np.sqrt(s_pre*np.prod(s_pre-length_pre))
+                return (drift_pos, area_diff)
         else:
             return (None, None)
 
@@ -167,11 +174,9 @@ class Poss(io.IOBase):
             # b is the numpy array of the image, 3 bytes of color depth
             if not self.pipe_read.poll(): 
                 img = np.reshape(np.fromstring(b, dtype=np.uint8), (self.frameHeight, self.frameWidth, 3))
-                M = np.float32([[1,0,100],[0,1,100]])
-                img = cv2.warpAffine(img, M, (img.shape[0],img.shape[1]))
-                if self.flag_1:
+                if self.flag_fi:
                     # Capture the first image
-                    self.flag_1 = False
+                    self.flag_fi = False
                     self.imgNow = self.imgPost = img
                 else:
                     # Finding the feature inside the frame
@@ -188,4 +193,3 @@ class Poss(io.IOBase):
             if self.DEBUG:
                 print("POSS - Running at %2.2f Hz"%(1/(time.time()-start)))
             return len(b)
-
