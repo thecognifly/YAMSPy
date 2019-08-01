@@ -11,7 +11,7 @@ class Flow(io.IOBase):
 
     def __init__(self, pipe_read, pipe_write,
                     frameWidth=240, frameHeight=240,
-                    altitude = 100, #cm
+                    altitude = 1, #cm
                     DEBUG = False
                     ):
         # @ Init the io.IOBase
@@ -102,7 +102,8 @@ class Poss(io.IOBase):
                       'BRIEF':cv2.xfeatures2d.BriefDescriptorExtractor_create}
         algorithm2use = 'ORB' # 'BRIEF', 'FAST', 'ORB', 'SURF', 'SIFT'
         number_of_features = 50 # Limited in 50
-        self.fea_det = algorithms[algorithm2use](number_of_features)       
+        self.fea_det = algorithms[algorithm2use](number_of_features) 
+        self.pt_pre = np.zeros()
 
     def img2kpt(self, img):
         '''
