@@ -12,9 +12,9 @@ class ToF():
         self.pipe_write = pipe_write 
         # Create a VL53L0X object
         self.tof = VL53L0X.VL53L0X(i2c_bus=1,i2c_address=0x29)
-        # I2C Address can change before tof.open()
-        # tof.change_address(0x32)
+
         self.tof.open()
+        
         # Start ranging
         # 'BEST', 'BETTER', 'GOOD', 'HIGH_SPEED', 'LONG_RANGE'
         self.tof.start_ranging(VL53L0X.Vl53l0xAccuracyMode.LONG_RANGE)
