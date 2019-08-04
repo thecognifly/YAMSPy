@@ -5,34 +5,47 @@ class PID():
     '''
 
     def __init__(self, kp, ki, kd):
-        
+        # @ gain of Proportional 
         self.kp = kp
+        # @ gain of Integration 
         self.ki = ki
+        # @ gain of Derivative 
         self.kd = kd
-        self.i_roll = 0  # for integration in roll
-        self.i_pitch = 0 # for integration in pitch
-        self.error_roll = 0
-        self.error_pitch = 0
+        # @ Sum of Integration
+        self.integral = 0
+        # @ Error input
+        self.error = None
+        # @ Previous error for derivative 
+        self.error_pre = None
+        # @ detal time
+        self.dt = None
     
-    def p(self, error):
-        return (self.kp * error)
+    def p(self):
+        return (self.kp * self.error)
     
-    def i(self, error):
-        return (self.ki * error)
+    def i(self):
+        self.integral += (self.ki * self.error / self.dt)
+        return (self.integral)
     
-    def d(self, error):
-        return (self.kd * error)
+    def d(self):
+        return (self.kd * (self.error - self.error_pre) / self.dt )
 
-    def calc(self, data):
+    def reset(self):
+        '''Reset the Integration Part'''
+        self.integral = 0
+
+    def calc(self, data, time = 1, velocity = None):
         '''
         Call this function for return the roll and pitch value
         PID = Kp*error + I + Ki*error + kd*(error-error_pre)/time 
         return roll, pitch value
-        '''
-        self.error_roll += -data[1]  # roll data
-        self.error_pitch += -data[0] # pitch data
-        self.i_roll += self.error_roll
-        self.i_pitch += self.error_pitch
-        PID_roll = self.p(self.error_roll) + self.i_roll + self.i(self.error_roll) + self.d(-data[1])     
-        PID_pitch = self.p(self.error_pitch) + self.i_pitch + self.i(self.error_pitch) + self.d(-data[0])
-        return (PID_roll, PID_pitch)
+        ''' 
+        self.dt = time
+        self.error_pre = self.error
+        self.error = data
+        if velocity:
+            return (self.p() + (self.kd*velocity))
+        elif self.error_pre:
+             return (self.p() + self.i() + self.d())
+        else:
+            return (self.p() + self.i())
