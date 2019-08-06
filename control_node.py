@@ -18,6 +18,10 @@ def control_process(*args):
 
     os.nice(nice_level)
 
+    #
+    # Initialize KF
+    #
+
     value_available = False
     altitude = None
     postition_hold = False
@@ -52,7 +56,7 @@ def control_process(*args):
                 value_available = True
 
         if control_imu_pipe_read.poll():
-            _ = control_imu_pipe_read.recv()
+            _ = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
 
         # This is reading the opticalflow output (around 10Hz)
         if control_optflow_pipe_read.poll():
@@ -66,21 +70,21 @@ def control_process(*args):
 
             value_available = True
 
-        # This is just to check the speed... (around 2Hz)
-        if control_cv_pipe_read.poll():
-            data_recv = control_cv_pipe_read.recv()
-            if data_recv:
-                (x_motion, y_motion), area = data_recv
+        # # This is just to check the speed... (around 2Hz)
+        # if control_cv_pipe_read.poll():
+        #     data_recv = control_cv_pipe_read.recv()
+        #     if data_recv:
+        #         (x_motion, y_motion), area = data_recv
 
-                if y_motion:
-                    next_roll = -Y_GAIN*y_motion
-                    CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+        #         if y_motion:
+        #             next_roll = -Y_GAIN*y_motion
+        #             CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
 
-                if y_motion:
-                    next_pitch = -X_GAIN*x_motion
-                    CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
+        #         if y_motion:
+        #             next_pitch = -X_GAIN*x_motion
+        #             CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
 
-                value_available = True
+        #         value_available = True
 
 
         if value_available and (not ext_control_pipe_read.poll()):

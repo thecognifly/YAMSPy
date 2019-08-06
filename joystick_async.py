@@ -66,7 +66,7 @@ READ_IMU_FC_FREQ = 15
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
