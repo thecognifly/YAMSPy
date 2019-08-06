@@ -2,7 +2,6 @@ import os
 import time
 import numpy as np
 
-import filterpy
 from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 
@@ -36,12 +35,12 @@ def control_process(*args):
 
     # The Sensor Model
     tof_filter.F = np.array([[1, dt],
-                            [0, 1]]) 
+                             [0, 1]]) 
     # tof_filter.F[0,1] = dt
 
     # Control Matrix
     tof_filter.B = np.array([[0.5*(dt**2)],
-                            [dt]]) 
+                             [dt]]) 
     # tof_filter.B[0] = 0.5*(dt**2)
     # tof_filter.B[1] = dt
 
@@ -49,7 +48,7 @@ def control_process(*args):
     tof_filter.Q *= 0.001
     # Measurement covariance
     # Noise of he sensor ~0.01m (1cm)
-    tof_filter.R = np.array([[0.01]])
+    tof_filter.R *= 0.01
 
     #throttle PID
     throttle_pd = PID(0.8, 0, 0.4)
@@ -59,8 +58,10 @@ def control_process(*args):
     value_available = False
     altitude = None
     postition_hold = False
-    prev_altitude = 0
+    init_altitude = 0
     prev_time = time.time()
+
+    save_values = []
     while True:
 
         CMDS = {
@@ -72,43 +73,52 @@ def control_process(*args):
         if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
             postition_hold = ext_control_pipe_write.recv()
             if not postition_hold:
-                prev_altitude = None
+                init_altitude = None
+                np.save("/home/pi/saved_data", save_values)
             
         if control_imu_pipe_read.poll():
             imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
 
         if postition_hold:
             # Remember to reset integrator here too!
-            prev_altitude = altitude
+            init_altitude = altitude_sensor # this is very very unlikelly to happen before receiving a reading...
             postition_hold = False
 
             # initial value from the sensor
             # the cognifly have the initial heigth of 0.11m
-            tof_filter.x = np.array([[altitude], 
+            tof_filter.x = np.array([[init_altitude], 
                                     [0]]) 
             # covariance matrix
-            tof_filter.P *= np.array([[0.1, 0],
-                                      [0, 0.1]])
+            tof_filter.P = np.array([[0.1, 0],
+                                    [0, 0.1]])
             continue
 
-        if prev_altitude:
+        if init_altitude:
             # This is reading the ToF output
             dt = time.time()-prev_time
             tof_filter.F[0,1] = dt
             tof_filter.B[0] = 0.5*(dt**2)
-            tof_filter.B[1] = dt            
-            altitude_kf = tof_filter.predict(u = imu[0][2])
-            altitude = altitude_kf[0][0]
-            velocity = altitude_kf[0][1]
+            tof_filter.B[1] = dt
+            tof_filter.predict(u = -9.81*(0.99-imu[0][2]))
+            altitude = tof_filter.x[0,0]
+            velocity = tof_filter.x[1,0]
 
-            # error = altitude - prev_altitude
+            print("altitude,velocity,sensor", altitude, velocity, altitude_sensor)
+            print("K", tof_filter.K)
+            save_values.append([altitude, velocity, altitude_sensor,-9.81*(0.99-imu[0][2])])
+            
+            # error = altitude - init_altitude
             # next_throttle = -Z_GAIN*error
             next_throttle = throttle_pd.calc(altitude, velocity=velocity)
             CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE 
             value_available = True
 
         if control_tof_pipe_read.poll():
-            tof_filter.update(control_tof_pipe_read.recv())
+            if not init_altitude:
+                altitude_sensor = control_tof_pipe_read.recv()
+            else:
+                altitude_sensor = control_tof_pipe_read.recv()
+                tof_filter.update(altitude_sensor)
 
 
         # This is reading the opticalflow output (around 10Hz)
@@ -145,4 +155,4 @@ def control_process(*args):
             value_available = False
 
         prev_time = time.time()
-        time.sleep(PERIOD)
+        time.sleep(PERIOD)        
