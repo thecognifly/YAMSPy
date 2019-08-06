@@ -1,5 +1,6 @@
 # !pip install filterpy
 # https://filterpy.readthedocs.io/en/latest/
+import os
 import time
 import numpy as np
 from multiprocessing import Process, Pipe
@@ -9,6 +10,8 @@ from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 
 from tof_node import ToF
+
+os.nice(-10)
 
 control_ToF_pipe_write, control_ToF_pipe_read = Pipe()
 TofFilter_freq = 30 #Hz
@@ -20,6 +23,8 @@ TofFilter_freq = 30 #Hz
 
 # Setup the ToF library
 tof = ToF(control_ToF_pipe_write, control_ToF_pipe_read)
+tof_process = Process(target = tof.run, args = (5,))
+tof_process.start()
 
 # Sleep Time:
 t = 1/TofFilter_freq
@@ -44,15 +49,26 @@ tof_filter.H = np.array([[1, 0]])
 tof_filter.P *= 0.01 
 
 # Process covariance
-tof_filter.Q *= 0.01
+tof_filter.Q *= 0
 
 # Measurement covariance
 # Noise of he sensor ~0.05m
-tof_filter.R = np.array([[1]])
+tof_filter.R = np.array([[0.05]])
 
-# >>> Read data
-if control_ToF_pipe_read.poll():
-        tof_filter.update([control_ToF_pipe_read.recv()])
-else:
-        # u is the acceration of the z-axis
-        tof_filter.predict(u)
+try:
+        while True:
+                try:
+                        # >>> Read data
+                        if control_ToF_pipe_read.poll():
+                                tof_filter.update([control_ToF_pipe_read.recv()])
+                                print ("Update")
+                        else:
+                                # u is the acceration of the z-axis
+                                tof_filter.predict(u = (0))
+                        print (tof_filter.x)
+                        time.sleep(t)
+                except KeyboardInterrupt:
+                        break
+
+finally:
+        tof_process.terminate()
