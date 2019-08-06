@@ -103,7 +103,7 @@ class Poss(io.IOBase):
         algorithm2use = 'ORB' # 'BRIEF', 'FAST', 'ORB', 'SURF', 'SIFT'
         number_of_features = 50 # Limited in 50
         self.fea_det = algorithms[algorithm2use](number_of_features) 
-        self.pt_pre = np.zeros()
+        # self.pt_pre = np.zeros()
 
     def img2kpt(self, img):
         '''

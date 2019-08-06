@@ -26,8 +26,8 @@ class Camera():
         self.framerate = frameRate
         self.contrast = 42
         # @ The Pipe for feeding the motion data and opencv data
-        self.pipe_read_of, self.pipe_write_of = pipe_of
-        self.pipe_read_cv, self.pipe_write_cv = pipe_cv
+        self.pipe_write_of, self.pipe_read_of = pipe_of
+        self.pipe_write_cv, self.pipe_read_cv = pipe_cv
 
         # @ For Debug use
         self.DEBUG = DEBUG
@@ -78,4 +78,3 @@ class Camera():
 #     return (pipe_read_of.recv())
 # camera_start.terminate()
 # camera_start.join()
-
