@@ -1,7 +1,15 @@
 import os
 import time
+import numpy as np
+
+import filterpy
+from filterpy.kalman import KalmanFilter
+from filterpy.common import Q_discrete_white_noise
+
+from pid import PID
 
 FREQ = 20
+TofFilter_freq = 20
 PERIOD = 1/FREQ
 ABS_MAX_VALUE_ROLL = 50
 ABS_MAX_VALUE_PITCH = 50
@@ -18,9 +26,33 @@ def control_process(*args):
 
     os.nice(nice_level)
 
-    #
-    # Initialize KF
-    #
+    # >>Initialize KF
+    dt = 1/TofFilter_freq
+    # Set up the filter
+    tof_filter = KalmanFilter(dim_x = 2, dim_z = 1, dim_u = 1)
+    # initial value from the sensor
+    # the cognifly have the initial heigth of 0.11m
+    tof_filter.x = np.array([[0.11], 
+                            [0]]) 
+    # The Sensor Model
+    tof_filter.F = np.array([[1, dt],
+                            [0, 1]]) 
+    # Control Matrix
+    tof_filter.B = np.array([[0.5*(dt**2)*(1)],
+                            [dt*(1)]]) 
+    # Measurement Matrix
+    tof_filter.H = np.array([[1, 0]])
+    # covariance matrix
+    tof_filter.P *= np.array([[0.1, 0],
+                            [0 ,   0.1]])
+    # Process covariance
+    tof_filter.Q *= 0.001
+    # Measurement covariance
+    # Noise of he sensor ~0.01m (1cm)
+    tof_filter.R = np.array([[0.01]])
+
+    #throttle PID
+    throttle_pd = PID(0.8, 0, 0.4)
 
     value_available = False
     altitude = None
@@ -39,24 +71,29 @@ def control_process(*args):
             if not postition_hold:
                 prev_altitude = None
             
-        # This is reading the ToF output (around 30Hz)
-        if control_tof_pipe_read.poll():
-            altitude = control_tof_pipe_read.recv()
-
-            if postition_hold:
-                # Remember to reset integrator here too!
-                prev_altitude = altitude
-                postition_hold = False
-                continue
-
-            if prev_altitude:
-                error = altitude - prev_altitude
-                next_throttle = -Z_GAIN*error
-                CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE 
-                value_available = True
-
         if control_imu_pipe_read.poll():
-            _ = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
+            imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
+
+        # This is reading the ToF output (around 30Hz)
+        altitude_kf = tof_filter.predict(u = imu[0][3])
+        altitude = altitude_kf[0][0]
+        velocity = altitude_kf[0][1]
+        if postition_hold:
+            # Remember to reset integrator here too!
+            prev_altitude = altitude
+            postition_hold = False
+            continue
+
+        if prev_altitude:
+            error = altitude - prev_altitude
+            next_throttle = -Z_GAIN*error
+            _next_throttle = throttle_pd.calc(altitude, velocity=velocity)
+            CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE 
+            value_available = True
+
+        if control_tof_pipe_read.poll():
+            tof_filter.update(control_tof_pipe_read.recv())
+
 
         # This is reading the opticalflow output (around 10Hz)
         if control_optflow_pipe_read.poll():
