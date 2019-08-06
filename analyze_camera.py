@@ -157,7 +157,7 @@ class Poss(io.IOBase):
                 area_diff = np.sqrt(s_now*np.prod(s_now-length_now)) - np.sqrt(s_pre*np.prod(s_pre-length_pre))
                 return (drift_pos, area_diff)
         else:
-            return (None, None)
+            return ((None, None), None)
 
     def writable(self):
         '''
