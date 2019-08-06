@@ -101,7 +101,7 @@ def control_process(*args):
             altitude = altitude_kf[0][0]
             velocity = altitude_kf[0][1]
 
-            error = altitude - prev_altitude
+            # error = altitude - prev_altitude
             # next_throttle = -Z_GAIN*error
             next_throttle = throttle_pd.calc(altitude, velocity=velocity)
             CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE 
