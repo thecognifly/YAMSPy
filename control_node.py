@@ -11,9 +11,9 @@ from pid import PID
 FREQ = 20
 TofFilter_freq = 20
 PERIOD = 1/FREQ
-ABS_MAX_VALUE_ROLL = 50
-ABS_MAX_VALUE_PITCH = 50
-ABS_MAX_VALUE_THROTTLE = 50
+ABS_MAX_VALUE_ROLL = 150
+ABS_MAX_VALUE_PITCH = 150
+ABS_MAX_VALUE_THROTTLE = 150
 
 
 Y_GAIN = 40
@@ -30,21 +30,21 @@ def control_process(*args):
     dt = 1/TofFilter_freq
     # Set up the filter
     tof_filter = KalmanFilter(dim_x = 2, dim_z = 1, dim_u = 1)
-    # initial value from the sensor
-    # the cognifly have the initial heigth of 0.11m
-    tof_filter.x = np.array([[0.11], 
-                            [0]]) 
+
+    # Measurement Matrix
+    tof_filter.H = np.array([[1, 0]])
+
     # The Sensor Model
     tof_filter.F = np.array([[1, dt],
                             [0, 1]]) 
+    # tof_filter.F[0,1] = dt
+
     # Control Matrix
-    tof_filter.B = np.array([[0.5*(dt**2)*(1)],
-                            [dt*(1)]]) 
-    # Measurement Matrix
-    tof_filter.H = np.array([[1, 0]])
-    # covariance matrix
-    tof_filter.P *= np.array([[0.1, 0],
-                            [0 ,   0.1]])
+    tof_filter.B = np.array([[0.5*(dt**2)],
+                            [dt]]) 
+    # tof_filter.B[0] = 0.5*(dt**2)
+    # tof_filter.B[1] = dt
+
     # Process covariance
     tof_filter.Q *= 0.001
     # Measurement covariance
@@ -54,10 +54,13 @@ def control_process(*args):
     #throttle PID
     throttle_pd = PID(0.8, 0, 0.4)
 
+    imu = [[0,0,0]]
+
     value_available = False
     altitude = None
     postition_hold = False
     prev_altitude = 0
+    prev_time = time.time()
     while True:
 
         CMDS = {
@@ -74,20 +77,33 @@ def control_process(*args):
         if control_imu_pipe_read.poll():
             imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
 
-        # This is reading the ToF output (around 30Hz)
-        altitude_kf = tof_filter.predict(u = imu[0][3])
-        altitude = altitude_kf[0][0]
-        velocity = altitude_kf[0][1]
         if postition_hold:
             # Remember to reset integrator here too!
             prev_altitude = altitude
             postition_hold = False
+
+            # initial value from the sensor
+            # the cognifly have the initial heigth of 0.11m
+            tof_filter.x = np.array([[altitude], 
+                                    [0]]) 
+            # covariance matrix
+            tof_filter.P *= np.array([[0.1, 0],
+                                      [0, 0.1]])
             continue
 
         if prev_altitude:
+            # This is reading the ToF output
+            dt = time.time()-prev_time
+            tof_filter.F[0,1] = dt
+            tof_filter.B[0] = 0.5*(dt**2)
+            tof_filter.B[1] = dt            
+            altitude_kf = tof_filter.predict(u = imu[0][2])
+            altitude = altitude_kf[0][0]
+            velocity = altitude_kf[0][1]
+
             error = altitude - prev_altitude
-            next_throttle = -Z_GAIN*error
-            _next_throttle = throttle_pd.calc(altitude, velocity=velocity)
+            # next_throttle = -Z_GAIN*error
+            next_throttle = throttle_pd.calc(altitude, velocity=velocity)
             CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE 
             value_available = True
 
@@ -128,4 +144,5 @@ def control_process(*args):
             ext_control_pipe_write.send(CMDS)
             value_available = False
 
+        prev_time = time.time()
         time.sleep(PERIOD)
