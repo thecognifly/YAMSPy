@@ -68,17 +68,19 @@ def control_process(*args):
 
         # This is just to check the speed... (around 2Hz)
         if control_cv_pipe_read.poll():
-            (x_motion, y_motion), area = control_cv_pipe_read.recv()
+            data_recv = control_cv_pipe_read.recv()
+            if data_recv:
+                (x_motion, y_motion), area = data_recv
 
-            if y_motion:
-                next_roll = -Y_GAIN*y_motion
-                CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+                if y_motion:
+                    next_roll = -Y_GAIN*y_motion
+                    CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
 
-            if y_motion:
-                next_pitch = -X_GAIN*x_motion
-                CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
+                if y_motion:
+                    next_pitch = -X_GAIN*x_motion
+                    CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
 
-            value_available = True
+                value_available = True
 
 
         if value_available and (not ext_control_pipe_read.poll()):
