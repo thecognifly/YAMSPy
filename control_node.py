@@ -68,7 +68,7 @@ def control_process(*args):
 
         # This is just to check the speed... (around 2Hz)
         if control_cv_pipe_read.poll():
-            x_motion, y_motion = control_cv_pipe_read.recv()
+            (x_motion, y_motion), area = control_cv_pipe_read.recv()
 
             if y_motion:
                 next_roll = -Y_GAIN*y_motion
@@ -79,7 +79,6 @@ def control_process(*args):
                 CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
 
             value_available = True
-            print("Received from camera...")
 
 
         if value_available and (not ext_control_pipe_read.poll()):

@@ -103,7 +103,6 @@ class Poss(io.IOBase):
         algorithm2use = 'ORB' # 'BRIEF', 'FAST', 'ORB', 'SURF', 'SIFT'
         number_of_features = 50 # Limited in 50
         self.fea_det = algorithms[algorithm2use](number_of_features) 
-        # self.pt_pre = np.zeros()
 
     def img2kpt(self, img):
         '''
@@ -134,12 +133,12 @@ class Poss(io.IOBase):
                 # >> having a numpy array for faster calc
                 # numpy array [x, y], [x, y], [x, y]
                 pt_pre = np.array([[kq[matches[0].queryIdx].pt[0], kq[matches[0].queryIdx].pt[1]],
-                                [kq[matches[1].queryIdx].pt[0], kq[matches[1].queryIdx].pt[1]],
-                                [kq[matches[2].queryIdx].pt[0], kq[matches[2].queryIdx].pt[1]]])
+                                   [kq[matches[1].queryIdx].pt[0], kq[matches[1].queryIdx].pt[1]],
+                                   [kq[matches[2].queryIdx].pt[0], kq[matches[2].queryIdx].pt[1]]])
 
                 pt_now = np.array([[kt[matches[0].trainIdx].pt[0], kt[matches[0].trainIdx].pt[1]],
-                                [kt[matches[1].trainIdx].pt[0], kt[matches[1].trainIdx].pt[1]],
-                                [kt[matches[2].trainIdx].pt[0], kt[matches[2].trainIdx].pt[1]]])
+                                   [kt[matches[1].trainIdx].pt[0], kt[matches[1].trainIdx].pt[1]],
+                                   [kt[matches[2].trainIdx].pt[0], kt[matches[2].trainIdx].pt[1]]])
                 # >>> drift_pos = [drift_x, drift_y]
                 drift_pos = ((np.sum((pt_pre-pt_now), axis=0))/3)
                 # >>> length = [a, b, c]
@@ -155,7 +154,7 @@ class Poss(io.IOBase):
                 s_pre = (np.sum(length_pre))/2
                 s_now = (np.sum(length_now))/2
                 # area_diff = area_now - area_pre
-                area_diff= np.sqrt(s_now*np.prod(s_now-length_now)) - np.sqrt(s_pre*np.prod(s_pre-length_pre))
+                area_diff = np.sqrt(s_now*np.prod(s_now-length_now)) - np.sqrt(s_pre*np.prod(s_pre-length_pre))
                 return (drift_pos, area_diff)
         else:
             return (None, None)
