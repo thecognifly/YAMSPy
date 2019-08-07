@@ -55,6 +55,7 @@ def control_process(*args):
 
     imu = [[0,0,0]]
 
+    altitude_sensor = None
     value_available = False
     altitude = None
     postition_hold = False
@@ -79,9 +80,9 @@ def control_process(*args):
         if control_imu_pipe_read.poll():
             imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
 
-        if postition_hold:
+        if postition_hold and altitude_sensor:
             # Remember to reset integrator here too!
-            init_altitude = altitude_sensor # this is very very unlikelly to happen before receiving a reading...
+            init_altitude = altitude_sensor
             postition_hold = False
 
             # initial value from the sensor
