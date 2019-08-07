@@ -11,7 +11,6 @@ class Flow(io.IOBase):
 
     def __init__(self, pipe_read, pipe_write,
                     frameWidth=240, frameHeight=240,
-                    altitude = 1, #cm
                     DEBUG = False
                     ):
         # @ Init the io.IOBase
@@ -28,7 +27,6 @@ class Flow(io.IOBase):
         # @ Set the calc parameter
         self.max_flow = (((self.frameWidth) / 16) * ((self.frameHeight) / 16) * 2**7)
         self.flow  = .165 / self.max_flow
-        self.ALTITUDE = altitude
 
         # @ Set the motion array parameter
         self.data = None
@@ -62,8 +60,8 @@ class Flow(io.IOBase):
         # We do all the calc when pipe is usable, help to save processing power
         if not self.pipe_read.poll(): 
             data = (np.frombuffer(b, dtype=self.motion_dtype).reshape((self.rows, self.cols)))
-            x_motion = np.sum(data['x'])*self.flow*self.ALTITUDE
-            y_motion = np.sum(data['y'])*self.flow*self.ALTITUDE
+            x_motion = np.sum(data['x'])*self.flow
+            y_motion = np.sum(data['y'])*self.flow
             x_motion = 0 if abs(x_motion) < 0.1 else x_motion
             y_motion = 0 if abs(y_motion) < 0.1 else y_motion
             self.pipe_write.send((x_motion, y_motion))
