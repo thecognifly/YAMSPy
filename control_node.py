@@ -45,10 +45,10 @@ def control_process(*args):
     # tof_filter.B[1] = dt
 
     # Process covariance
-    tof_filter.Q *= 0.001
+    tof_filter.Q *= 0.9
     # Measurement covariance
     # Noise of he sensor ~0.01m (1cm)
-    tof_filter.R *= 0.01
+    tof_filter.R *= 0.02**2
 
     #throttle PID
     throttle_pd = PID(0.8, 0, 0.4)
@@ -90,7 +90,7 @@ def control_process(*args):
                                     [0]]) 
             # covariance matrix
             tof_filter.P = np.array([[0.1, 0],
-                                    [0, 0.1]])
+                                     [0, 1]])
             continue
 
         if init_altitude:
@@ -105,7 +105,7 @@ def control_process(*args):
 
             print("altitude,velocity,sensor", altitude, velocity, altitude_sensor)
             print("K", tof_filter.K)
-            save_values.append([altitude, velocity, altitude_sensor,-9.81*(0.99-imu[0][2])])
+            save_values.append([dt, altitude, velocity, altitude_sensor,-9.81*(0.99-imu[0][2])])
             
             # error = altitude - init_altitude
             # next_throttle = -Z_GAIN*error
