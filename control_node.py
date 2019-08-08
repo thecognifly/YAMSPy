@@ -10,14 +10,15 @@ from pid import PID
 FREQ = 20
 TofFilter_freq = 20
 PERIOD = 1/FREQ
-ABS_MAX_VALUE_ROLL = 150
-ABS_MAX_VALUE_PITCH = 150
+ABS_MAX_VALUE_ROLL = 50
+ABS_MAX_VALUE_PITCH = 50
 ABS_MAX_VALUE_THROTTLE = 150
 
 
 Y_GAIN = 40
 X_GAIN = 40
-Z_GAIN = 75
+PZ_GAIN = 0
+DZ_GAIN = 0
 
 def control_process(*args):
 
@@ -28,10 +29,10 @@ def control_process(*args):
     # >>Initialize KF
     dt = 1/TofFilter_freq
     # Set up the filter
-    tof_filter = KalmanFilter(dim_x = 2, dim_z = 1, dim_u = 1)
+    tof_filter = KalmanFilter(dim_x = 2, dim_z = 2, dim_u = 1)
 
     # Measurement Matrix
-    tof_filter.H = np.array([[1, 0]])
+    tof_filter.H = np.array([[1, 0], [0, 1]])
 
     # The Sensor Model
     tof_filter.F = np.array([[1, dt],
@@ -39,22 +40,26 @@ def control_process(*args):
     # tof_filter.F[0,1] = dt
 
     # Control Matrix
-    tof_filter.B = np.array([[0.5*(dt**2)],
+    # tof_filter.B = np.array([[0.5*(dt**2)],
+    #                          [dt]]) 
+    tof_filter.B = np.array([[0],
                              [dt]]) 
+
     # tof_filter.B[0] = 0.5*(dt**2)
     # tof_filter.B[1] = dt
 
     # Process covariance
-    tof_filter.Q *= 0.9
+    tof_filter.Q = np.diag([0.9, 0.9])
     # Measurement covariance
     # Noise of he sensor ~0.01m (1cm)
-    tof_filter.R *= 0.02**2
+    tof_filter.R = np.diag([0.02**2, 0.05**2])
 
     #throttle PID
-    throttle_pd = PID(0.8, 0, 0.4)
+    throttle_pd = PID(PZ_GAIN, 0, DZ_GAIN)
 
     imu = [[0,0,0]]
 
+    prev_altitude_sensor = None
     altitude_sensor = None
     value_available = False
     altitude = None
@@ -62,7 +67,7 @@ def control_process(*args):
     init_altitude = 0
     prev_time = time.time()
 
-    save_values = []
+    # save_values = []
     while True:
 
         CMDS = {
@@ -75,14 +80,14 @@ def control_process(*args):
             postition_hold = ext_control_pipe_write.recv()
             if not postition_hold:
                 init_altitude = None
-                np.save("/home/pi/saved_data", save_values)
+                # np.save("/home/pi/saved_data", save_values)
             
         if control_imu_pipe_read.poll():
             imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
 
         if postition_hold and altitude_sensor:
             # Remember to reset integrator here too!
-            init_altitude = altitude_sensor
+            prev_altitude_sensor = init_altitude = altitude_sensor
             postition_hold = False
 
             # initial value from the sensor
@@ -104,22 +109,26 @@ def control_process(*args):
             altitude = tof_filter.x[0,0]
             velocity = tof_filter.x[1,0]
 
-            print("altitude,velocity,sensor", altitude, velocity, altitude_sensor)
-            print("K", tof_filter.K)
-            save_values.append([dt, altitude, velocity, altitude_sensor,-9.81*(0.99-imu[0][2])])
+            # print("altitude,velocity,sensor", altitude, velocity, altitude_sensor)
+            # save_values.append([dt, altitude, velocity, altitude_sensor,-9.81*(0.99-imu[0][2])])
             
-            # error = altitude - init_altitude
+            error_altitude =  init_altitude - altitude
             # next_throttle = -Z_GAIN*error
-            next_throttle = throttle_pd.calc(altitude, velocity=velocity)
+            next_throttle = throttle_pd.calc(error_altitude, velocity=-velocity)
             CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE 
+
+            prev_altitude_sensor = altitude_sensor
+
             value_available = True
+
+
 
         if control_tof_pipe_read.poll():
             if not init_altitude:
                 altitude_sensor = control_tof_pipe_read.recv()
             else:
                 altitude_sensor = control_tof_pipe_read.recv()
-                tof_filter.update(altitude_sensor)
+                tof_filter.update([altitude_sensor, (altitude_sensor-prev_altitude_sensor)/dt])
 
 
         # This is reading the opticalflow output (around 10Hz)
