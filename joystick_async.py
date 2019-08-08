@@ -283,6 +283,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                     # altitude
                                     ext_contr_pipe.send(True)
                                 print('AUTONOMOUS MODE...')
+                                CMDS['throttle'] = last_throttle
                                 dev.write(ecodes.EV_FF, effect_id, 5) # vibrate for longer here
                             else:
                                 autonomous = False
@@ -290,8 +291,9 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                     # Indicates to the external controller it needs to reset the current
                                     # altitude
                                     ext_contr_pipe.send(False)
-                                CMDS['pitch'] = CMDS_init['pitch']
                                 CMDS['roll'] = CMDS_init['roll']
+                                CMDS['pitch'] = CMDS_init['pitch']
+                                CMDS['throttle'] = last_throttle
                                 CMDS['yaw'] = CMDS_init['yaw']
                                 print('MANUAL MODE...')
                                 dev.write(ecodes.EV_FF, effect_id, 1)
@@ -472,6 +474,7 @@ async def ask_exit(signame, loop):
 
 def run_loop(pipes):
     joystick_pipe, imu_pipes = pipes
+    # ioloop = asyncio.new_event_loop()
     ioloop = uvloop.new_event_loop() # should be faster...
     tasks = [
         joystick_interface(gamepad, joystick_pipe),
