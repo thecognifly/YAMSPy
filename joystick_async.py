@@ -66,7 +66,7 @@ READ_IMU_FC_FREQ = 15
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['roll', 'pitch', 'throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
@@ -85,7 +85,10 @@ CMDS = CMDS_init.copy()
 # I'm not sure if this order changes according to the configurations made to betaflight...
 CMDS_ORDER = ['roll', 'pitch', 'throttle', 'yaw', 'aux1', 'aux2', 'aux3', 'aux4']
 
-gamepad = InputDevice('/dev/input/event2')
+try:
+    gamepad = InputDevice('/dev/input/event2')
+except FileNotFoundError:
+    raise Exception('The PS4 Remote not connected')
 
 shutdown = False
 
@@ -204,7 +207,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                         else:
                             reboot_event[1] = False
 
-                if ext_contr_pipe: 
+                if ext_contr_pipe and autonomous: 
                     # process info from external controller
                     if ext_contr_pipe.poll():
                         cmds_pipe = ext_contr_pipe.recv()
@@ -283,7 +286,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                     # altitude
                                     ext_contr_pipe.send(True)
                                 print('AUTONOMOUS MODE...')
-                                CMDS['throttle'] = last_throttle
+                                # CMDS['throttle'] = last_throttle
                                 dev.write(ecodes.EV_FF, effect_id, 5) # vibrate for longer here
                             else:
                                 autonomous = False
