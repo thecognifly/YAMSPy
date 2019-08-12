@@ -247,6 +247,28 @@ class MSPy:
         loglevel : str, optional
             The loglevel passed to logging (default is 'DEBUG')
         """
+
+        self.dataHandler_init = {
+            'state':                      0,
+            'message_direction':          -1,
+            'code':                       0,
+            'dataView':                   0,
+            'message_length_expected':    0,
+            'message_length_received':    0,
+            'message_buffer':             [],
+            'message_buffer_uint8_view':  [],
+            'message_checksum':           0,
+            'messageIsJumboFrame':        False,
+            'crcError':                   False,
+
+            'callbacks':                  [],
+            'packet_error':               0,
+            'unsupported':                0,
+
+            'last_received_timestamp':   None,
+            'listeners':                  []
+        }
+
         self.CONFIG = {
             'apiVersion':                       "0.0.0",
             'flightControllerIdentifier':       '',
@@ -816,26 +838,7 @@ class MSPy:
             dataHandler with the received data pre-parsed
         """
 
-        dataHandler = {
-            'state':                      0,
-            'message_direction':          -1,
-            'code':                       0,
-            'dataView':                   0,
-            'message_length_expected':    0,
-            'message_length_received':    0,
-            'message_buffer':             [],
-            'message_buffer_uint8_view':  [],
-            'message_checksum':           0,
-            'messageIsJumboFrame':        False,
-            'crcError':                   False,
-
-            'callbacks':                  [],
-            'packet_error':               0,
-            'unsupported':                0,
-
-            'last_received_timestamp':   None,
-            'listeners':                  []
-        }
+        dataHandler = self.dataHandler_init.copy()
 
         while True:
             data = self.conn.read() # this returns one byte
