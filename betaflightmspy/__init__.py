@@ -829,10 +829,27 @@ class MSPy:
         return 1
 
     def receive_raw_msg(self):
-        msg_header = self.conn.read(4)
-        msg_body = self.conn.read(ord(msg_header[-1]))
+        """Receive multiple bytes at once when it's not a jumbo frame.
+
+        Returns
+        -------
+        bytes
+            data received
+        """
+
+        while True:
+            msg_header = self.conn.read()
+            if ord(msg_header) == 36: # $
+                break
+
+        msg_header += self.conn.read(3) # M + > or < + frame size
+        frame_size = msg_header[-1]
+        if frame_size == MSPy.JUMBO_FRAME_SIZE_LIMIT:
+            return msg_header
+        else:
+            msg = self.conn.read(msg_header[-1] + 2) # +2 for msg code and crc
         
-        return msg_header+msg_body
+            return msg_header + msg
 
     def receive_msg(self):
         """Receive an MSP message from the serial port
@@ -848,8 +865,10 @@ class MSPy:
 
         received_bytes = self.receive_raw_msg()
 
+        di = 0
         while True:
-            data = received_bytes.pop()
+            data = received_bytes[di]
+            di += 1
             dataHandler['last_received_timestamp'] = time.time()
 
             logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
@@ -858,11 +877,11 @@ class MSPy:
 
             # it will always fall in the first state by default
             if dataHandler['state'] == 0: # sync char 1
-                if (ord(data) == 36): # $ - a new MSP message begins with $
+                if ((data) == 36): # $ - a new MSP message begins with $
                     dataHandler['state'] = 1
 
             elif dataHandler['state'] == 1: # sync char 2
-                if (ord(data) == 77): # M - followed by an M
+                if ((data) == 77): # M - followed by an M
                     dataHandler['state'] = 2
                 else: # something went wrong, no M received...
                     logging.warning('Something went wrong, no M received.')
@@ -870,11 +889,11 @@ class MSPy:
 
             elif dataHandler['state'] == 2: # direction (should be >)
                 dataHandler['unsupported'] = 0
-                if (ord(data) == 62): # > FC to PC
+                if ((data) == 62): # > FC to PC
                     dataHandler['message_direction'] = 1
-                elif (ord(data) == 60): # < PC to FC
+                elif ((data) == 60): # < PC to FC
                     dataHandler['message_direction'] = 0
-                elif (ord(data) == 33): # !
+                elif ((data) == 33): # !
                     # FC reports unsupported message error
                     logging.warning('FC reports unsupported message error.')
                     dataHandler['unsupported'] = 1
@@ -882,24 +901,25 @@ class MSPy:
                 dataHandler['state'] = 3
 
             elif dataHandler['state'] == 3:
-                dataHandler['message_length_expected'] = ord(data)
+                dataHandler['message_length_expected'] = (data)
                 if dataHandler['message_length_expected'] == MSPy.JUMBO_FRAME_SIZE_LIMIT:
                     logging.debug("JumboFrame received.")
                     dataHandler['messageIsJumboFrame'] = True
+                    received_bytes += self.conn.read()
 
                 # start the checksum procedure
-                dataHandler['message_checksum'] = ord(data)
-
+                dataHandler['message_checksum'] = (data)
                 dataHandler['state'] = 4
 
             elif dataHandler['state'] == 4:
-                dataHandler['code'] = ord(data)
-                dataHandler['message_checksum'] ^= ord(data)
+                dataHandler['code'] = (data)
+                dataHandler['message_checksum'] ^= (data)
 
                 if dataHandler['message_length_expected'] > 0:
                     # process payload
                     if dataHandler['messageIsJumboFrame']:
                         dataHandler['state'] = 5
+                        received_bytes += self.conn.read()
                     else:
                         dataHandler['state'] = 7
                 else:
@@ -908,22 +928,24 @@ class MSPy:
 
             elif dataHandler['state'] == 5:
                 # this is a JumboFrame
-                dataHandler['message_length_expected'] = ord(data)
+                dataHandler['message_length_expected'] = (data)
 
-                dataHandler['message_checksum'] ^= ord(data)
+                dataHandler['message_checksum'] ^= (data)
 
                 dataHandler['state'] = 6
+                received_bytes += self.conn.read()
 
             elif dataHandler['state'] == 6:
                 # calculates the JumboFrame size
-                dataHandler['message_length_expected'] +=  256 * ord(data)
+                dataHandler['message_length_expected'] +=  256 * (data)
                 logging.debug("JumboFrame message_length_expected: {}".format(dataHandler['message_length_expected']))
                 # There's no way to check for transmission errors here...
                 # In the worst scenario, it will try to read 255 + 256*255 = 65535 bytes
 
-                dataHandler['message_checksum'] ^= ord(data)
+                dataHandler['message_checksum'] ^= (data)
 
                 dataHandler['state'] = 7
+                received_bytes += self.conn.read(dataHandler['message_length_expected']+1) # +1 for CRC
 
             elif dataHandler['state'] == 7:
                 # setup buffer according to the message_length_expected
@@ -931,26 +953,26 @@ class MSPy:
                 dataHandler['message_buffer_uint8_view'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
 
                 # payload
-                dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = ord(data)
-                dataHandler['message_checksum'] ^= ord(data)
+                dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = (data)
+                dataHandler['message_checksum'] ^= (data)
                 dataHandler['message_length_received'] += 1
 
                 if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
-                        dataHandler['state'] = 9
+                    dataHandler['state'] = 9
                 else:
                     dataHandler['state'] = 8
 
             elif dataHandler['state'] == 8:
                 # payload
-                dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = ord(data)
-                dataHandler['message_checksum'] ^= ord(data)
+                dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = (data)
+                dataHandler['message_checksum'] ^= (data)
                 dataHandler['message_length_received'] += 1
 
                 if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
-                        dataHandler['state'] = 9                        
+                    dataHandler['state'] = 9
 
-            elif dataHandler['state'] == 9: 
-                    if dataHandler['message_checksum'] == ord(data):
+            elif dataHandler['state'] == 9:
+                    if dataHandler['message_checksum'] == (data):
                         # checksum is correct, message received, store dataview
                         logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
                         dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
@@ -958,14 +980,16 @@ class MSPy:
                     else:
                         # wrong checksum
                         logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
-                                                                                                       ord(data),
+                                                                                                       (data),
                                                                                                        dataHandler['message_checksum']))
                         dataHandler['crcError'] = True
                         break # sends it to the error state
 
+        
         # it means an error occurred
         logging.warning('Error detected on state: {}'.format(dataHandler['state']))
         dataHandler['packet_error'] = 1
+
         return dataHandler
 
     @staticmethod
