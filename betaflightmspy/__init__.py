@@ -828,6 +828,12 @@ class MSPy:
         
         return 1
 
+    def receive_raw_msg(self):
+        msg_header = self.conn.read(4)
+        msg_body = self.conn.read(ord(msg_header[-1]))
+        
+        return msg_header+msg_body
+
     def receive_msg(self):
         """Receive an MSP message from the serial port
         Based on betaflight-configurator (https://git.io/fjRAz)
@@ -840,8 +846,10 @@ class MSPy:
 
         dataHandler = self.dataHandler_init.copy()
 
+        received_bytes = self.receive_raw_msg()
+
         while True:
-            data = self.conn.read() # this returns one byte
+            data = received_bytes.pop()
             dataHandler['last_received_timestamp'] = time.time()
 
             logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
