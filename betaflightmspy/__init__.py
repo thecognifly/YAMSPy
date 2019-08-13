@@ -833,30 +833,29 @@ class MSPy:
         """
 
         # Request IMU values
-        self.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'])
+        if self.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU']):
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
+            # data_length: 9 x 2 = 18 bytes
+            data_length = 18
+            msg = self.receive_raw_msg(size = (6+data_length))[5:]
+            converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
 
-        # $ + M + < + data_length + msg_code + data + msg_crc
-        # 6 bytes + data_length
-        # data_length: 9 x 2 = 18 bytes
-        data_length = 18
-        msg = self.receive_raw_msg(size = (6+data_length))[5:]
-        converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
+            # 512 for mpu6050, 256 for mma
+            # currently we are unable to differentiate between the sensor types, so we are going with 512
+            self.SENSOR_DATA['accelerometer'][0] = converted_msg[0] / 512
+            self.SENSOR_DATA['accelerometer'][1] = converted_msg[1] / 512
+            self.SENSOR_DATA['accelerometer'][2] = converted_msg[2] / 512
 
-        # 512 for mpu6050, 256 for mma
-        # currently we are unable to differentiate between the sensor types, so we are going with 512
-        self.SENSOR_DATA['accelerometer'][0] = converted_msg[0] / 512
-        self.SENSOR_DATA['accelerometer'][1] = converted_msg[1] / 512
-        self.SENSOR_DATA['accelerometer'][2] = converted_msg[2] / 512
+            # properly scaled
+            self.SENSOR_DATA['gyroscope'][0] = converted_msg[3] * (4 / 16.4)
+            self.SENSOR_DATA['gyroscope'][1] = converted_msg[4] * (4 / 16.4)
+            self.SENSOR_DATA['gyroscope'][2] = converted_msg[5] * (4 / 16.4)
 
-        # properly scaled
-        self.SENSOR_DATA['gyroscope'][0] = converted_msg[3] * (4 / 16.4)
-        self.SENSOR_DATA['gyroscope'][1] = converted_msg[4] * (4 / 16.4)
-        self.SENSOR_DATA['gyroscope'][2] = converted_msg[5] * (4 / 16.4)
-
-        # no clue about scaling factor
-        self.SENSOR_DATA['magnetometer'][0] = converted_msg[6] / 1090
-        self.SENSOR_DATA['magnetometer'][1] = converted_msg[7] / 1090
-        self.SENSOR_DATA['magnetometer'][2] = converted_msg[8] / 1090
+            # no clue about scaling factor
+            self.SENSOR_DATA['magnetometer'][0] = converted_msg[6] / 1090
+            self.SENSOR_DATA['magnetometer'][1] = converted_msg[7] / 1090
+            self.SENSOR_DATA['magnetometer'][2] = converted_msg[8] / 1090
 
 
     def fast_read_attitude(self):
@@ -864,39 +863,38 @@ class MSPy:
         """
 
         # Request ATTITUDE values
-        self.send_RAW_msg(MSPy.MSPCodes['MSP_ATTITUDE'])
+        if self.send_RAW_msg(MSPy.MSPCodes['MSP_ATTITUDE']):
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
+            # data_length: 3 x 2 = 6 bytes
+            data_length = 6
+            msg = self.receive_raw_msg(size = (6+data_length))[5:]
+            converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
 
-        # $ + M + < + data_length + msg_code + data + msg_crc
-        # 6 bytes + data_length
-        # data_length: 3 x 2 = 6 bytes
-        data_length = 6
-        msg = self.receive_raw_msg(size = (6+data_length))[5:]
-        converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
-
-        self.SENSOR_DATA['kinematics'][0] = converted_msg[0] / 10.0 # x
-        self.SENSOR_DATA['kinematics'][1] = converted_msg[1] / 10.0 # y
-        self.SENSOR_DATA['kinematics'][2] = converted_msg[2] # z
+            self.SENSOR_DATA['kinematics'][0] = converted_msg[0] / 10.0 # x
+            self.SENSOR_DATA['kinematics'][1] = converted_msg[1] / 10.0 # y
+            self.SENSOR_DATA['kinematics'][2] = converted_msg[2] # z
     
     
     def fast_read_analog(self):
         """Request, read and process the ANALOG message
         """
+
         # Request ANALOG values
-        self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'])
+        if self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG']):
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
+            # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
+            data_length = 9
+            msg = self.receive_raw_msg(size = (6+data_length))[5:]
+            converted_msg = struct.unpack('<B2HhH', msg[:-1])
 
-        # $ + M + < + data_length + msg_code + data + msg_crc
-        # 6 bytes + data_length
-        # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
-        data_length = 9
-        msg = self.receive_raw_msg(size = (6+data_length))[5:]
-        converted_msg = struct.unpack('<B2HhH', msg[:-1])
-
-        # the first byte (converted_msg[0]) is only used on old systems...
-        self.ANALOG['mAhdrawn'] = converted_msg[1]
-        self.ANALOG['rssi'] = converted_msg[2] # 0-1023
-        self.ANALOG['amperage'] = converted_msg[3] / 100 # A
-        self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
-        self.ANALOG['voltage'] = converted_msg[4] / 100
+            # the first byte (converted_msg[0]) is only used on old systems...
+            self.ANALOG['mAhdrawn'] = converted_msg[1]
+            self.ANALOG['rssi'] = converted_msg[2] # 0-1023
+            self.ANALOG['amperage'] = converted_msg[3] / 100 # A
+            self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
+            self.ANALOG['voltage'] = converted_msg[4] / 100
 
 
     def fast_msp_rc_cmd(self, cmds):
@@ -908,14 +906,15 @@ class MSPy:
             List with RC values to be sent
             * The number of values is 4 + number of AUX channels enabled (max 14) 
         """
+        
         data = struct.pack('<%dH' % len(cmds), *cmds)
-        self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
-        # $ + M + < + data_length + msg_code + data + msg_crc
-        # 6 bytes + data_length
+        if self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data):
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
 
-        # The FC will send a code 0 message until it received enough RC msgs, then it
-        # will return a code 200. However, the message is always empty (data_length = 0).
-        _ = self.receive_raw_msg(size = 6)
+            # The FC will send a code 0 message until it received enough RC msgs, then it
+            # will return a code 200. However, the message is always empty (data_length = 0).
+            _ = self.receive_raw_msg(size = 6)
 
 
     # def fast_cmd_and_read(self, cmds):
