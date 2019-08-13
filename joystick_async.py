@@ -59,7 +59,6 @@ PRINT_VALUES_FREQ = 5
 JOYSTICK_FREQ = 20
 MAIN_FREQ = 50
 READ_VOLT_FC_FREQ = 1
-READ_IMU_FC_FREQ = 15
 
 # TIMEOUT = 1/MAIN_FREQ
 # TIMEOUT_JOYSTICK = 1/JOYSTICK_FREQ # this is only useful to avoid locking at shutdown
@@ -324,8 +323,10 @@ async def print_values():
     while not shutdown:
         print("Frequencies:")
         print(["{} - {:.2f}Hz".format(keys, 1/frequencies_measurement[keys]) for keys in frequencies_keys])
-        print("Average voltage:")
-        print("{:.2f}V ({:.2f}V)".format(mean_voltage, min_voltage))
+        if board:
+            print("Voltage / Accelerometer / Attitude:")
+            values = [mean_voltage, min_voltage] + board.SENSOR_DATA['accelerometer'] + board.SENSOR_DATA['kinematics']
+            print("{:.2f}V ({:.2f}V) - AccX:{:.2f}, AccY:{:.2f}, AccZ:{:.2f} - R:{:.2f}, P:{:.2f}, Y:{:.2f}".format(*values))
         print("Commands:")
         print(["{} - {:.2f}".format(cmd, CMDS[cmd]) for cmd in CMDS_ORDER])
 
@@ -402,12 +403,14 @@ async def send_cmds_to_fc(pipes):
 
     prev_time = time.time()
     while not shutdown:
+        print("Connecting to the FC...")
         with MSPy(device="/dev/ttyACM0", loglevel='WARNING', baudrate=115200) as board:
             if board == 1: # an error occurred...
-                print("Not connected to the FC...")
+                print("Connecting to the FC... FAILED!")
                 await asyncio.sleep(1)
                 continue
             else:
+                print("Connecting to the FC... OK!")
                 try:
                     while not shutdown:
                         if fc_reboot:
@@ -425,13 +428,13 @@ async def send_cmds_to_fc(pipes):
                         board.fast_read_imu()
                         board.fast_read_attitude()
 
-                        if not pipe_read.poll():
-                            # accelerometer = board.SENSOR_DATA['accelerometer']
-                            # gyroscope = board.SENSOR_DATA['gyroscope']
-                            # attitude = board.SENSOR_DATA['kinematics']
-                            pipe_write.send((board.SENSOR_DATA['accelerometer'],
-                                             board.SENSOR_DATA['gyroscope'],
-                                             board.SENSOR_DATA['kinematics']))
+                        # if not pipe_read.poll():
+                        #     # accelerometer = board.SENSOR_DATA['accelerometer']
+                        #     # gyroscope = board.SENSOR_DATA['gyroscope']
+                        #     # attitude = board.SENSOR_DATA['kinematics']
+                        #     pipe_write.send((board.SENSOR_DATA['accelerometer'],
+                        #                      board.SENSOR_DATA['gyroscope'],
+                        #                      board.SENSOR_DATA['kinematics']))
 
                         frequencies_measurement['send_cmds_to_fc'] = time.time() - prev_time
                         prev_time = time.time()
