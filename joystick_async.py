@@ -104,14 +104,12 @@ frequencies_keys = ['send_cmds_to_fc',
                     'joystick_interface', 
                     'autonomous', 
                     'read_voltage_from_fc', 
-                    'read_imu_from_fc',
                     'print_values']
 
 frequencies_measurement = {'joystick_interface':-1,
                            'send_cmds_to_fc':-1,
                            'autonomous':-1,
                            'read_voltage_from_fc':-1,
-                           'read_imu_from_fc':-1,
                            'print_values':-1}
 
 # Setup for the vibration
@@ -394,56 +392,13 @@ async def read_voltage_from_fc(dev):
     print("read_voltage_from_fc closing...")
 
 
-async def read_imu_from_fc(pipes):
-    print("read_imu_from_fc started...")
-    pipe_write, pipe_read = pipes 
-
-    while not board:
-        await asyncio.sleep(1/READ_IMU_FC_FREQ)
-
-    # if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
-    #     dataHandler = board.receive_msg()
-    #     board.process_recv_data(dataHandler)
-
-    board.fast_read_imu()
-    accelerometer = board.SENSOR_DATA['accelerometer']
-    gyroscope = board.SENSOR_DATA['gyroscope']
-
-    # dataReady = False
-    prev_time = time.time()
-    while not shutdown:
-        # it will only query for new imu values if the other side of the pipe was emptied
-        if not pipe_read.poll():
-            # if not dataReady: #make sure the data received is processed only in the next loop
-            #     if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
-            #         dataHandler = board.receive_msg()
-            #         dataReady = True
-            # else:
-            #     board.process_recv_data(dataHandler)
-            #     accelerometer = board.SENSOR_DATA['accelerometer']
-            #     gyroscope = board.SENSOR_DATA['gyroscope']
-            #     dataReady = False
-
-            board.fast_read_imu()
-            accelerometer = board.SENSOR_DATA['accelerometer']
-            gyroscope = board.SENSOR_DATA['gyroscope']
-            
-            pipe_write.send((accelerometer,gyroscope))
-            
-            frequencies_measurement['read_imu_from_fc'] = time.time() - prev_time
-
-        prev_time = time.time()
-        
-        await asyncio.sleep(1/READ_IMU_FC_FREQ)
-
-    print("read_imu_from_fc closing...")
-
-
-async def send_cmds_to_fc():
+async def send_cmds_to_fc(pipes):
     global fc_reboot
     global shutdown
     global board
     print("send_cmds_to_fc started...")
+
+    pipe_write, pipe_read = pipes 
 
     prev_time = time.time()
     while not shutdown:
@@ -467,6 +422,16 @@ async def send_cmds_to_fc():
                         #     board.process_recv_data(dataHandler)
 
                         board.fast_msp_rc_cmd(CMDS_RC)
+                        board.fast_read_imu()
+                        board.fast_read_attitude()
+
+                        if not pipe_read.poll():
+                            # accelerometer = board.SENSOR_DATA['accelerometer']
+                            # gyroscope = board.SENSOR_DATA['gyroscope']
+                            # attitude = board.SENSOR_DATA['kinematics']
+                            pipe_write.send((board.SENSOR_DATA['accelerometer'],
+                                             board.SENSOR_DATA['gyroscope'],
+                                             board.SENSOR_DATA['kinematics']))
 
                         frequencies_measurement['send_cmds_to_fc'] = time.time() - prev_time
                         prev_time = time.time()
@@ -492,9 +457,8 @@ def run_loop(pipes):
     tasks = [
         joystick_interface(gamepad, joystick_pipe),
         read_voltage_from_fc(gamepad),
-        read_imu_from_fc(imu_pipes),
         print_values(),
-        send_cmds_to_fc()
+        send_cmds_to_fc(imu_pipes)
     ]
 
     for sig in ['SIGHUP','SIGINT', 'SIGTERM']:
