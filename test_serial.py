@@ -48,85 +48,45 @@ try:
                 continue
             else:
                 try:
-                    # init read imu
-                    if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
-                        dataHandler = board.receive_msg()
-                        board.process_recv_data(dataHandler)
-                
-                    accelerometer = board.SENSOR_DATA['accelerometer']
-                    gyroscope = board.SENSOR_DATA['gyroscope']
-                
-                    imudataReady = False
                     prev_time = time.time()
-
-                    # init read BAT
-                    for msg in command_list: 
-                        if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-                            dataHandler = board.receive_msg()
-                            board.process_recv_data(dataHandler)
-            
-                    min_voltage = board.BATTERY_CONFIG['vbatmincellvoltage']*board.BATTERY_STATE['cellCount']
-                    warn_voltage = board.BATTERY_CONFIG['vbatwarningcellvoltage']*board.BATTERY_STATE['cellCount']
-                    max_voltage = board.BATTERY_CONFIG['vbatmaxcellvoltage']*board.BATTERY_STATE['cellCount']
-                    voltage = board.ANALOG['voltage']
-                    avg_voltage_deque = deque([voltage]*5)
-                    batdataReady = False
-
-
                     while not shutdown:
-                        # send RC
-                        if fc_reboot:
-                            shutdown = True
-                            print('REBOOTING...')
-                            break
-                        
                         CMDS_RC = [CMDS[ki] for ki in CMDS_ORDER]
 
-                        if board.send_RAW_RC(CMDS_RC):
-                            dataHandler = board.receive_msg()
-                            board.process_recv_data(dataHandler)
-
-                        if DEBUG:
-                            wfc.append(1/(time.time()-prev_time))
-                            print ("Write to FC: %2.2f Hz"%(1/(time.time()-prev_time)))
-                        prev_time = time.time()
-
-                        # Read IMU
-                        if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
-                            dataHandler = board.receive_msg()
-                            board.process_recv_data(dataHandler)
-                            accelerometer = board.SENSOR_DATA['accelerometer']
-                            gyroscope = board.SENSOR_DATA['gyroscope']  
+                        #if board.send_RAW_RC(CMDS_RC):
+                        #    dataHandler = board.receive_msg()
+                        #    print(dataHandler)
+                        #    #board.process_recv_data(dataHandler)
                         
-                        if DEBUG:
-                            rfc.append(1/(time.time()-prev_time))
-                            print ("Read IMU: %2.2f Hz"%(1/(time.time()-prev_time)))
-                        else:
-                            print ("IMU: ", imudataReady)
+                        board.fast_msp_rc_cmd(CMDS_RC)
+                        board.fast_read_analog()
+                        board.fast_read_attitude()
+                        board.fast_read_imu()
+                        #board.fast_cmd_and_read(CMDS_RC)
+                        accelerometer = board.SENSOR_DATA['accelerometer']
+                        gyroscope = board.SENSOR_DATA['gyroscope']
+                        voltage = board.ANALOG['voltage']
+                        attitude = board.SENSOR_DATA['kinematics']
+
+                        print(accelerometer)
+                        print(gyroscope)
+                        print(attitude)
+                        print(voltage)
+
+                        #if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
+                        #    dataHandler = board.receive_msg()
+                        #    board.process_recv_data(dataHandler)
+                        #    accelerometer = board.SENSOR_DATA['accelerometer']
+                        #    gyroscope = board.SENSOR_DATA['gyroscope']  
                         
+                        #if board.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'], data=[]):
+                        #    dataHandler = board.receive_msg()
+                        #    board.process_recv_data(dataHandler)
+                        #    voltage = board.ANALOG['voltage']
+                
+                        print ("Read speed: %2.2f Hz"%(1/(time.time()-prev_time)))
                         prev_time = time.time()
 
-                        # read bat
-                        if board.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'], data=[]):
-                            dataHandler = board.receive_msg()
-                            board.process_recv_data(dataHandler)
-                            voltage = board.ANALOG['voltage']
-                
-                        avg_voltage_deque.appendleft(voltage)
-                        avg_voltage_deque.pop()
-                
-                        mean_voltage = sum(avg_voltage_deque)/5
-                        if DEBUG:
-                            rfcbat.append(1/(time.time()-prev_time))
-                            print ("Read BAT: %2.2f Hz"%(1/(time.time()-prev_time)))
-                            # print (accelerometer, voltage)
-                        else:
-                            print("BAT", batdataReady)
-                        prev_time = time.time()
                 except KeyboardInterrupt:
                     shutdown = True
 finally:
-    np.save('write', wfc)
-    np.save('read', rfc)
-    np.save("read_bat",rfcbat)
-    print ("Finish")
+    print("FINISHED")
