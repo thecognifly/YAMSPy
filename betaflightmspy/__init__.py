@@ -906,7 +906,7 @@ class MSPy:
             List with RC values to be sent
             * The number of values is 4 + number of AUX channels enabled (max 14) 
         """
-        
+        cmds = [int(cmd) for cmd in cmds]
         data = struct.pack('<%dH' % len(cmds), *cmds)
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data):
             # $ + M + < + data_length + msg_code + data + msg_crc
@@ -967,8 +967,9 @@ class MSPy:
 
         while True:
             msg_header = self.conn.read()
-            if ord(msg_header) == 36: # $
-                break
+            if msg_header:
+                if ord(msg_header) == 36: # $
+                    break
         if not size:
             msg_header += self.conn.read(3) # M + > or < + frame size
             frame_size = msg_header[-1]
