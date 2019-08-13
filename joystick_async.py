@@ -361,17 +361,20 @@ async def read_voltage_from_fc(dev):
         voltage = board.ANALOG['voltage']
         avg_voltage_deque = deque([voltage]*5)
 
-    dataReady = False
+    # dataReady = False
     prev_time = time.time()
     while not shutdown:
-        if not dataReady: #make sure the data received is processed only in the next loop
-            if board.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'], data=[]):
-                dataHandler = board.receive_msg()
-                dataReady = True
-        else:
-            board.process_recv_data(dataHandler)
-            voltage = board.ANALOG['voltage']
-            dataReady = False
+        # if not dataReady: #make sure the data received is processed only in the next loop
+        #     if board.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'], data=[]):
+        #         dataHandler = board.receive_msg()
+        #         dataReady = True
+        # else:
+        #     board.process_recv_data(dataHandler)
+        #     voltage = board.ANALOG['voltage']
+        #     dataReady = False
+
+        board.fast_read_analog()
+        voltage = board.ANALOG['voltage']
 
         avg_voltage_deque.appendleft(voltage)
         avg_voltage_deque.pop()
@@ -398,29 +401,34 @@ async def read_imu_from_fc(pipes):
     while not board:
         await asyncio.sleep(1/READ_IMU_FC_FREQ)
 
-    if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
-        dataHandler = board.receive_msg()
-        board.process_recv_data(dataHandler)
+    # if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
+    #     dataHandler = board.receive_msg()
+    #     board.process_recv_data(dataHandler)
 
+    board.fast_read_imu()
     accelerometer = board.SENSOR_DATA['accelerometer']
     gyroscope = board.SENSOR_DATA['gyroscope']
 
-    dataReady = False
+    # dataReady = False
     prev_time = time.time()
     while not shutdown:
         # it will only query for new imu values if the other side of the pipe was emptied
         if not pipe_read.poll():
-            if not dataReady: #make sure the data received is processed only in the next loop
-                if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
-                    dataHandler = board.receive_msg()
-                    dataReady = True
-            else:
-                board.process_recv_data(dataHandler)
-                accelerometer = board.SENSOR_DATA['accelerometer']
-                gyroscope = board.SENSOR_DATA['gyroscope']
-                dataReady = False
+            # if not dataReady: #make sure the data received is processed only in the next loop
+            #     if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'], data=[]):
+            #         dataHandler = board.receive_msg()
+            #         dataReady = True
+            # else:
+            #     board.process_recv_data(dataHandler)
+            #     accelerometer = board.SENSOR_DATA['accelerometer']
+            #     gyroscope = board.SENSOR_DATA['gyroscope']
+            #     dataReady = False
 
-                pipe_write.send((accelerometer,gyroscope))
+            board.fast_read_imu()
+            accelerometer = board.SENSOR_DATA['accelerometer']
+            gyroscope = board.SENSOR_DATA['gyroscope']
+            
+            pipe_write.send((accelerometer,gyroscope))
             
             frequencies_measurement['read_imu_from_fc'] = time.time() - prev_time
 
@@ -439,7 +447,7 @@ async def send_cmds_to_fc():
 
     prev_time = time.time()
     while not shutdown:
-        with MSPy(device="/dev/ttyACM0", loglevel='WARNING', baudrate=500000) as board:
+        with MSPy(device="/dev/ttyACM0", loglevel='WARNING', baudrate=115200) as board:
             if board == 1: # an error occurred...
                 print("Not connected to the FC...")
                 await asyncio.sleep(1)
@@ -454,9 +462,11 @@ async def send_cmds_to_fc():
                         
                         CMDS_RC = [CMDS[ki] for ki in CMDS_ORDER]
 
-                        if board.send_RAW_RC(CMDS_RC):
-                            dataHandler = board.receive_msg()
-                            board.process_recv_data(dataHandler)
+                        # if board.send_RAW_RC(CMDS_RC):
+                        #     dataHandler = board.receive_msg()
+                        #     board.process_recv_data(dataHandler)
+
+                        board.fast_msp_rc_cmd(CMDS_RC)
 
                         frequencies_measurement['send_cmds_to_fc'] = time.time() - prev_time
                         prev_time = time.time()
