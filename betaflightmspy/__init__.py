@@ -828,7 +828,136 @@ class MSPy:
         
         return 1
 
-    def receive_raw_msg(self):
+    def fast_read_imu(self):
+        """Request, read and process the IMU
+        """
+
+        # Request IMU values
+        self.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'])
+
+        # $ + M + < + data_length + msg_code + data + msg_crc
+        # 6 bytes + data_length
+        # data_length: 9 x 2 = 18 bytes
+        data_length = 18
+        msg = self.receive_raw_msg(size = (6+data_length))[5:]
+        converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
+
+        # 512 for mpu6050, 256 for mma
+        # currently we are unable to differentiate between the sensor types, so we are going with 512
+        self.SENSOR_DATA['accelerometer'][0] = converted_msg[0] / 512
+        self.SENSOR_DATA['accelerometer'][1] = converted_msg[1] / 512
+        self.SENSOR_DATA['accelerometer'][2] = converted_msg[2] / 512
+
+        # properly scaled
+        self.SENSOR_DATA['gyroscope'][0] = converted_msg[3] * (4 / 16.4)
+        self.SENSOR_DATA['gyroscope'][1] = converted_msg[4] * (4 / 16.4)
+        self.SENSOR_DATA['gyroscope'][2] = converted_msg[5] * (4 / 16.4)
+
+        # no clue about scaling factor
+        self.SENSOR_DATA['magnetometer'][0] = converted_msg[6] / 1090
+        self.SENSOR_DATA['magnetometer'][1] = converted_msg[7] / 1090
+        self.SENSOR_DATA['magnetometer'][2] = converted_msg[8] / 1090
+
+
+    def fast_read_attitude(self):
+        """Request, read and process the ATTITUDE
+        """
+
+        # Request ATTITUDE values
+        self.send_RAW_msg(MSPy.MSPCodes['MSP_ATTITUDE'])
+
+        # $ + M + < + data_length + msg_code + data + msg_crc
+        # 6 bytes + data_length
+        # data_length: 3 x 2 = 6 bytes
+        data_length = 6
+        msg = self.receive_raw_msg(size = (6+data_length))[5:]
+        converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
+
+        self.SENSOR_DATA['kinematics'][0] = converted_msg[0] / 10.0 # x
+        self.SENSOR_DATA['kinematics'][1] = converted_msg[1] / 10.0 # y
+        self.SENSOR_DATA['kinematics'][2] = converted_msg[2] # z
+    
+    
+    def fast_read_analog(self):
+        """Request, read and process the ANALOG message
+        """
+        # Request ANALOG values
+        self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'])
+
+        # $ + M + < + data_length + msg_code + data + msg_crc
+        # 6 bytes + data_length
+        # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
+        data_length = 9
+        msg = self.receive_raw_msg(size = (6+data_length))[5:]
+        converted_msg = struct.unpack('<B2HhH', msg[:-1])
+
+        # the first byte (converted_msg[0]) is only used on old systems...
+        self.ANALOG['mAhdrawn'] = converted_msg[1]
+        self.ANALOG['rssi'] = converted_msg[2] # 0-1023
+        self.ANALOG['amperage'] = converted_msg[3] / 100 # A
+        self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
+        self.ANALOG['voltage'] = converted_msg[4] / 100
+
+
+    def fast_msp_rc_cmd(self, cmds):
+        """Send, read and process the RAW RC considering the MSP_RX
+
+        Parameters
+        ----------
+        cmds : list
+            List with RC values to be sent
+            * The number of values is 4 + number of AUX channels enabled (max 14) 
+        """
+        data = struct.pack('<%dH' % len(cmds), *cmds)
+        self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
+        # $ + M + < + data_length + msg_code + data + msg_crc
+        # 6 bytes + data_length
+
+        # The FC will send a code 0 message until it received enough RC msgs, then it
+        # will return a code 200. However, the message is always empty (data_length = 0).
+        _ = self.receive_raw_msg(size = 6)
+
+
+    # def fast_cmd_and_read(self, cmds):
+    #     """Send RAW RC considering the MSP_RX and receive IMU, ATTITUDE and ANALOG
+
+    #     First it will send all requests and then read the serial at once.
+
+    #     Parameters
+    #     ----------
+    #     cmds : list
+    #         List with RC values to be sent
+    #         * The number of values is 4 + number of AUX channels enabled (max 14) 
+    #     """
+    #     data = struct.pack('<%dH' % len(cmds), *cmds)
+    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
+    #     # _ = self.receive_raw_msg(size = 6)
+
+    #     # Request IMU values
+    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'])
+    #     # data_length = 18
+    #     # msg = self.receive_raw_msg(size = (6+data_length))[5:]
+    #     # converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
+
+    #     # Request ATTITUDE values
+    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_ATTITUDE'])
+    #     # data_length = 6
+    #     # msg = self.receive_raw_msg(size = (6+data_length))[5:]
+    #     # converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
+
+    #     # Request ANALOG values
+    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'])
+    #     # data_length = 9
+    #     # msg = self.receive_raw_msg(size = (6+data_length))[5:]
+    #     # converted_msg = struct.unpack('<B2HhH', msg[:-1])
+
+    #     # Receiving RC ACK(0), IMU(18), ATTITUDE(6) and ANALOG(9) + headers(5*4) and crcs(1*4)
+    #     msg = self.conn.read(0+18+6+9+24)
+
+    #     # Now it would need to process the received packages...
+    #     # but calling the other fast_* methods seems to be as fast as this one.
+        
+    def receive_raw_msg(self, size = None):
         """Receive multiple bytes at once when it's not a jumbo frame.
 
         Returns
@@ -841,15 +970,21 @@ class MSPy:
             msg_header = self.conn.read()
             if ord(msg_header) == 36: # $
                 break
-
-        msg_header += self.conn.read(3) # M + > or < + frame size
-        frame_size = msg_header[-1]
-        if frame_size == MSPy.JUMBO_FRAME_SIZE_LIMIT:
-            return msg_header
+        if not size:
+            msg_header += self.conn.read(3) # M + > or < + frame size
+            frame_size = msg_header[-1]
+            if frame_size == MSPy.JUMBO_FRAME_SIZE_LIMIT:
+                # since it's a JUMBO frame, it's necessary to process it more carefully
+                return msg_header
+            else:
+                msg = self.conn.read(msg_header[-1] + 2) # +2 for msg code and crc
+            
+                return msg_header + msg
         else:
-            msg = self.conn.read(msg_header[-1] + 2) # +2 for msg code and crc
-        
+            msg = self.conn.read(size - 1) # -1 to compensate for the $
             return msg_header + msg
+
+
 
     def receive_msg(self):
         """Receive an MSP message from the serial port
@@ -1983,6 +2118,7 @@ class MSPy:
     @staticmethod
     def convert(val_list, n=16): 
         """Convert to n*bits (8 multiple) list
+
         Parameters
         ----------
         val_list : list
@@ -2078,7 +2214,8 @@ class MSPy:
             number of bytes of data actually written (including 6 bytes header)
         """
 
-        #always reserve 6 bytes for protocol overhead !
+        # Always reserve 6 bytes for protocol overhead
+        # $ + M + < + data_length + msg_code + data + msg_crc
         if (data):
             size = len(data) + 6
             checksum = 0
