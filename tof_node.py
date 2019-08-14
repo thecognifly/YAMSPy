@@ -32,7 +32,8 @@ class ToF():
                     distance = self.tof.get_distance()
                     if distance > 0:
                         # print("%d mm, %d cm" % (distance, (distance/10)))
-                        self.pipe_write.send(distance/1000) # in meters
+                        distance = int(distance/10) # Truncate 2 d.p.
+                        self.pipe_write.send(distance/100) # in meters
                 time.sleep(self.timing/1000000.00)
 
         finally:
