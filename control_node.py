@@ -17,7 +17,8 @@ ABS_MAX_VALUE_THROTTLE = 100
 
 # Take off altitude
 TAKEOFF_ALTITUDE = 1 # m
-TAKEOFF_THRUST = 400 # 11.6V -> 400
+TAKEOFF_THRUST = 380 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410
+# weight -> 340
 # 420 is too much for takeoff
 TAKEOFF_LIST = np.zeros(20)
 for t in range(len(TAKEOFF_LIST)):
@@ -33,8 +34,8 @@ PY_GAIN = 40
 DY_GAIN = 40
 
 #Altitude Gain
-PZ_GAIN = 70 * 0.8
-DZ_GAIN = 130 * 0.8
+PZ_GAIN = 40
+DZ_GAIN = 5#130 * 0.15
 
 def control_process(*args):
     
@@ -172,8 +173,9 @@ def control_process(*args):
                     TAKEOFF_LIST.pop(0)
                     cancel_gravity_value = CMDS['throttle']
                 else:
-                    # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Reached")
-                    init_altitude = altitude    
+                    print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Reached")
+                    init_altitude = 0.5 #altitude   
+                    velocity = 0
                     TAKEOFF = False
                         
             # print("altitude,velocity,sensor", altitude, velocity, altitude_sensor)
@@ -186,6 +188,7 @@ def control_process(*args):
                 CMDS['throttle'] += cancel_gravity_value # Constant CG
                 value_available = True 
                 prev_altitude_sensor = altitude_corrected
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", CMDS['throttle'], next_throttle,  error_altitude, velocity)
                 
         if control_tof_pipe_read.poll():
             if not init_altitude:
@@ -195,7 +198,7 @@ def control_process(*args):
                 altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) # turning the altitdue back to ground
                 altitude_corrected = int(altitude_corrected*100)
                 altitude_corrected = altitude_corrected/100  # Truncate 2 d.p.
-                # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor, altitude_corrected,np.cos(imu[2][0]),np.cos(imu[2][1]))
+                # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", CMDS['throttle'], next_throttle,  error_altitude, velocity)
                 tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
                     
         # XY hold 
