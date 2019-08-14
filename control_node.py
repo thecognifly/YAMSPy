@@ -8,15 +8,21 @@ from filterpy.common import Q_discrete_white_noise
 from pid import PID
 
 # Basic parameter
-FREQ = 20
-TOFFILTER_FREQ = 20
+FREQ = 100
 PERIOD = 1/FREQ
+TOFFILTER_FREQ = 20
 ABS_MAX_VALUE_ROLL = 50
 ABS_MAX_VALUE_PITCH = 50
-ABS_MAX_VALUE_THROTTLE = 150
+ABS_MAX_VALUE_THROTTLE = 100
 
 # Take off altitude
 TAKEOFF_ALTITUDE = 1 # m
+TAKEOFF_THRUST = 400 # 11.6V -> 400
+# 420 is too much for takeoff
+TAKEOFF_LIST = np.zeros(20)
+for t in range(len(TAKEOFF_LIST)):
+    TAKEOFF_LIST[t] = ((1-(1/np.exp(t))))# act like a cap-charge shape
+TAKEOFF_LIST = TAKEOFF_LIST.tolist()
 
 #Pitch PD Gain 
 PX_GAIN = 40
@@ -27,8 +33,8 @@ PY_GAIN = 40
 DY_GAIN = 40
 
 #Altitude Gain
-PZ_GAIN = 70
-DZ_GAIN = 130
+PZ_GAIN = 70 * 0.8
+DZ_GAIN = 130 * 0.8
 
 def control_process(*args):
     
@@ -46,10 +52,10 @@ def control_process(*args):
     tof_filter.H = np.array([[1, 0], [0, 1]])
     # The Sensor Model
     tof_filter.F = np.array([[1, dt],
-    [0, 1]])   
+                            [0, 1]])   
     # Control Matrix
     tof_filter.B = np.array([[0],
-    [dt]]) 
+                             [dt]]) 
     # Process covariance
     tof_filter.Q = np.diag([0.9, 0.9])
     # Measurement covariance
@@ -111,13 +117,15 @@ def control_process(*args):
     init_altitude = 0
     prev_time = time.time()
 
+    CMDS = {
+            'throttle': 0,
+            'roll':     0,
+            'pitch':    0
+    }
     while True:
-
-        CMDS = {
-                'throttle': 0,
-                'roll':     0,
-                'pitch':    0
-        }
+        CMDS['throttle'] = 0
+        CMDS['roll']     = 0
+        CMDS['pitch']    = 0
 
         if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
             postition_hold = ext_control_pipe_write.recv()
@@ -150,60 +158,65 @@ def control_process(*args):
             tof_filter.F[0,1] = dt
             tof_filter.B[0] = 0.5*(dt**2)
             tof_filter.B[1] = dt
-            tof_filter.predict(u = -9.81*(0.99-imu[0][2]))
+            tof_filter.predict(u = 0) #Just test for non -9.81*(0.99-imu[0][2])
             altitude = tof_filter.x[0,0]
             velocity = tof_filter.x[1,0]
-
+            
+            # Takeoff 
+            if TAKEOFF:
+                if len(TAKEOFF_LIST):
+                    CMDS['throttle'] = TAKEOFF_LIST[0]*TAKEOFF_THRUST
+                    # TAKEOFF_LIST = np.delete(TAKEOFF_LIST, 0)
+                    value_available = True
+                    TAKEOFF_LIST.pop(0)
+                    cancel_gravity_value = CMDS['throttle']
+                else:
+                    # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Reached")
+                    init_altitude = altitude    
+                    TAKEOFF = False
+                        
             # print("altitude,velocity,sensor", altitude, velocity, altitude_sensor)
             # save_values.append([dt, altitude, velocity, altitude_sensor,-9.81*(0.99-imu[0][2])])
             
             error_altitude =  init_altitude - altitude
-            next_throttle = throttle_pd.calc(error_altitude, velocity=-velocity)
+            next_throttle = throttle_pd.calc(error_altitude, velocity=-velocity) 
             if (not TAKEOFF):
                 CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE
+                CMDS['throttle'] += cancel_gravity_value # Constant CG
                 value_available = True 
-
-            prev_altitude_sensor = altitude_sensor
+                prev_altitude_sensor = altitude_sensor
             if control_tof_pipe_read.poll():
                 if not init_altitude:
                     altitude_sensor = control_tof_pipe_read.recv()
                 else:
                     altitude_sensor = control_tof_pipe_read.recv()
                     tof_filter.update([altitude_sensor, (altitude_sensor-prev_altitude_sensor)/dt])
+                print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", error_altitude, velocity, (altitude_sensor-prev_altitude_sensor)/dt)
                     
-        # Takeoff 
-        if TAKEOFF:
-            if (tof_filter.x[0,0]<TAKEOFF_ALTITUDE*.85):
-                CMDS['throttle'] = (TAKEOFF_ALTITUDE*.85 - tof_filter.x[0,0]) * 200
-                value_available = True
-            else:
-                print ("Reached")
-                TAKEOFF = False
-        
         # XY hold 
         # update the filter
-        if True:
-            dt = time.time()-prev_time
-            KFXY.F[0,2] = (tof_filter.x[0,0]*dt)
-            KFXY.F[1,3] = (tof_filter.x[0,0]*dt)
-            KFXY.B[2,2] = dt
-            KFXY.B[3,3] = dt
-            KFXY_u[2,0] = imu[0][0] # ax
-            KFXY_u[3,0] = imu[0][1] # ay
-            KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
-        
-            next_roll = roll_pd.calc((KFXY.x[1,0] - pre_y), velocity=-KFXY.x[3,0]) # Y
-            next_pitch = pitch_pd.calc((KFXY.x[0,0] - pre_x), velocity=-KFXY.x[2,0]) # X
-            pre_x = KFXY.x[0,0]
-            pre_y = KFXY.x[1,0]
-            CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
-            CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
-            value_available = True
+        # if control_optflow_pipe_read.poll():
+        #     KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
+        #     KFXY.update(KFXY_z)
+
+        # dt = time.time()-prev_time
+        # KFXY.F[0,2] = (tof_filter.x[0,0]*dt)
+        # KFXY.F[1,3] = (tof_filter.x[0,0]*dt)
+        # KFXY.B[2,2] = dt
+        # KFXY.B[3,3] = dt
+        # KFXY_u[2,0] = imu[0][0] # ax
+        # KFXY_u[3,0] = imu[0][1] # ay
+        # KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
+    
+        # next_roll = roll_pd.calc((KFXY.x[1,0] - pre_y), velocity=-KFXY.x[3,0]) # Y
+        # next_pitch = pitch_pd.calc((KFXY.x[0,0] - pre_x), velocity=-KFXY.x[2,0]) # X
+        # pre_x = KFXY.x[0,0]
+        # pre_y = KFXY.x[1,0]
+        # CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+        # CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
+        # value_available = True
         
         # This is reading the opticalflow output (around 10Hz)
-        if control_optflow_pipe_read.poll():
-            KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
-            KFXY.update(KFXY_z)
 
         # save_values.append((tof_filter.x[0,0]*dt, dt, imu[0][0], imu[0][1],KFXY_z))
 
