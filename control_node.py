@@ -135,7 +135,7 @@ def control_process(*args):
                 # np.save("/home/pi/saved_data", save_values)
             
         if control_imu_pipe_read.poll():
-            imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [magX,magY,magZ]]
+            imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
 
         if postition_hold and altitude_sensor:
             # Remember to reset integrator here too!
