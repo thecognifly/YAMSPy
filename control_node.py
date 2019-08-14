@@ -57,7 +57,7 @@ def control_process(*args):
     tof_filter.B = np.array([[0],
                              [dt]]) 
     # Process covariance
-    tof_filter.Q = np.diag([0.9, 0.9])
+    tof_filter.Q = np.diag([0.9, 0.4])
     # Measurement covariance
     # Noise of he sensor ~0.01m (1cm)
     tof_filter.R = np.diag([0.02**2, 0.05**2])
@@ -92,7 +92,7 @@ def control_process(*args):
                         [0.]],dtype=float)
 
     # IMU value 
-    imu = [[0,0,0]]
+    imu = [[0,0,0][0,0,0][0,0,0]]
 
     '''
     PID
@@ -148,7 +148,7 @@ def control_process(*args):
                                     [0]]) 
             # covariance matrix
             tof_filter.P = np.array([[0.1, 0],
-                                     [0, 1]])
+                                     [0, 0.1]])
             continue
 
         # Altitude hold
@@ -190,8 +190,10 @@ def control_process(*args):
                     altitude_sensor = control_tof_pipe_read.recv()
                 else:
                     altitude_sensor = control_tof_pipe_read.recv()
+                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>IMU", imu)
+                    # altitude_sensor =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) # turning the altitdue back to ground
                     tof_filter.update([altitude_sensor, (altitude_sensor-prev_altitude_sensor)/dt])
-                print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", error_altitude, velocity, (altitude_sensor-prev_altitude_sensor)/dt)
+                # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor, prev_altitude_sensor, dt, (altitude_sensor-prev_altitude_sensor)/dt)
                     
         # XY hold 
         # update the filter
