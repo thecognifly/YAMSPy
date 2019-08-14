@@ -55,7 +55,7 @@ $ sudo find /. -name "evtest.py"
 and run it to get a list of valid stuff available.
 """
 
-PRINT_VALUES_FREQ = 5
+PRINT_VALUES_FREQ = 1
 JOYSTICK_FREQ = 20
 MAIN_FREQ = 50
 READ_VOLT_FC_FREQ = 1
@@ -65,7 +65,7 @@ READ_VOLT_FC_FREQ = 1
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['roll', 'pitch', 'throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
@@ -204,7 +204,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                         else:
                             reboot_event[1] = False
 
-                if ext_contr_pipe and autonomous: 
+                if ext_contr_pipe: 
                     # process info from external controller
                     if ext_contr_pipe.poll():
                         cmds_pipe = ext_contr_pipe.recv()
@@ -282,7 +282,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                     # Indicates to the external controller it needs to save the current
                                     # altitude
                                     ext_contr_pipe.send(True)
-                                print('AUTONOMOUS MODE...')
+                                print('>>>>>>>>>>>>>AUTONOMOUS MODE...')
                                 # CMDS['throttle'] = last_throttle
                                 dev.write(ecodes.EV_FF, effect_id, 5) # vibrate for longer here
                             else:
@@ -295,7 +295,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                 CMDS['pitch'] = CMDS_init['pitch']
                                 CMDS['throttle'] = last_throttle
                                 CMDS['yaw'] = CMDS_init['yaw']
-                                print('MANUAL MODE...')
+                                print('>>>>>>>>>>>>>MANUAL MODE...')
                                 dev.write(ecodes.EV_FF, effect_id, 1)
 
         # except asyncio.TimeoutError:
