@@ -130,7 +130,6 @@ def control_process(*args):
 
         if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
             postition_hold = ext_control_pipe_write.recv()
-            altitude_sensor = control_tof_pipe_read.recv()
             if not postition_hold:
                 init_altitude = None                    
                 # np.save("/home/pi/saved_data", save_values)
@@ -186,6 +185,7 @@ def control_process(*args):
                 CMDS['throttle'] += cancel_gravity_value # Constant CG
                 value_available = True 
                 prev_altitude_sensor = altitude_corrected
+                
             if control_tof_pipe_read.poll():
                 if not init_altitude:
                     altitude_sensor = control_tof_pipe_read.recv()
