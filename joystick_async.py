@@ -428,13 +428,13 @@ async def send_cmds_to_fc(pipes):
                         board.fast_read_imu()
                         board.fast_read_attitude()
 
-                        # if not pipe_read.poll():
-                        #     # accelerometer = board.SENSOR_DATA['accelerometer']
-                        #     # gyroscope = board.SENSOR_DATA['gyroscope']
-                        #     # attitude = board.SENSOR_DATA['kinematics']
-                        #     pipe_write.send((board.SENSOR_DATA['accelerometer'],
-                        #                      board.SENSOR_DATA['gyroscope'],
-                        #                      board.SENSOR_DATA['kinematics']))
+                        if not pipe_read.poll():
+                            # accelerometer = board.SENSOR_DATA['accelerometer']
+                            # gyroscope = board.SENSOR_DATA['gyroscope']
+                            # attitude = board.SENSOR_DATA['kinematics']
+                            pipe_write.send((board.SENSOR_DATA['accelerometer'],
+                                             board.SENSOR_DATA['gyroscope'],
+                                             board.SENSOR_DATA['kinematics']))
 
                         frequencies_measurement['send_cmds_to_fc'] = time.time() - prev_time
                         prev_time = time.time()
