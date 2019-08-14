@@ -127,6 +127,7 @@ def control_process(*args):
         CMDS['throttle'] = 0
         CMDS['roll']     = 0
         CMDS['pitch']    = 0
+        # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor)
 
         if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
             postition_hold = ext_control_pipe_write.recv()
@@ -186,17 +187,16 @@ def control_process(*args):
                 value_available = True 
                 prev_altitude_sensor = altitude_corrected
                 
-            if control_tof_pipe_read.poll():
-                if not init_altitude:
-                    altitude_sensor = control_tof_pipe_read.recv()
-                else:
-                    altitude_sensor = control_tof_pipe_read.recv()
-                    altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) # turning the altitdue back to ground
-                    altitude_corrected = int(altitude_corrected*100)
-                    altitude_corrected = altitude_corrected/100  # Truncate 2 d.p.
-                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor, altitude_corrected,np.cos(imu[2][0],np.cos(imu[2][1])))
-                    tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
-                # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor, prev_altitude_sensor, dt, (altitude_sensor-prev_altitude_sensor)/dt)
+        if control_tof_pipe_read.poll():
+            if not init_altitude:
+                altitude_sensor = control_tof_pipe_read.recv()
+            else:
+                altitude_sensor = control_tof_pipe_read.recv()
+                altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) # turning the altitdue back to ground
+                altitude_corrected = int(altitude_corrected*100)
+                altitude_corrected = altitude_corrected/100  # Truncate 2 d.p.
+                # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor, altitude_corrected,np.cos(imu[2][0]),np.cos(imu[2][1]))
+                tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
                     
         # XY hold 
         # update the filter
