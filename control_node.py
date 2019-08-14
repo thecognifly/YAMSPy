@@ -92,7 +92,7 @@ def control_process(*args):
                         [0.]],dtype=float)
 
     # IMU value 
-    imu = [[0,0,0][0,0,0][0,0,0]]
+    imu = [[0,0,0],[0,0,0],[0,0,0]]
 
     '''
     PID
@@ -111,6 +111,7 @@ def control_process(*args):
     
     prev_altitude_sensor = None
     altitude_sensor = None
+    altitude_corrected = None
     value_available = False
     altitude = None
     postition_hold = False
@@ -184,15 +185,17 @@ def control_process(*args):
                 CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE
                 CMDS['throttle'] += cancel_gravity_value # Constant CG
                 value_available = True 
-                prev_altitude_sensor = altitude_sensor
+                prev_altitude_sensor = altitude_corrected
             if control_tof_pipe_read.poll():
                 if not init_altitude:
                     altitude_sensor = control_tof_pipe_read.recv()
                 else:
                     altitude_sensor = control_tof_pipe_read.recv()
-                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>IMU", imu)
-                    # altitude_sensor =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) # turning the altitdue back to ground
-                    tof_filter.update([altitude_sensor, (altitude_sensor-prev_altitude_sensor)/dt])
+                    altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) # turning the altitdue back to ground
+                    altitude_corrected = int(altitude_corrected*100)
+                    altitude_corrected = altitude_corrected/100  # Truncate 2 d.p.
+                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor, altitude_corrected,np.cos(imu[2][0],np.cos(imu[2][1])))
+                    tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
                 # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor, prev_altitude_sensor, dt, (altitude_sensor-prev_altitude_sensor)/dt)
                     
         # XY hold 
