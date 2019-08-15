@@ -397,6 +397,7 @@ async def send_cmds_to_fc(pipes):
     global fc_reboot
     global shutdown
     global board
+    global min_voltage
     print("send_cmds_to_fc started...")
 
     pipe_write, pipe_read = pipes 
@@ -434,7 +435,8 @@ async def send_cmds_to_fc(pipes):
                             # attitude = board.SENSOR_DATA['kinematics']
                             pipe_write.send((board.SENSOR_DATA['accelerometer'],
                                              board.SENSOR_DATA['gyroscope'],
-                                             board.SENSOR_DATA['kinematics']))
+                                             board.SENSOR_DATA['kinematics']),
+                                             min_voltage)
 
                         frequencies_measurement['send_cmds_to_fc'] = time.time() - prev_time
                         prev_time = time.time()
