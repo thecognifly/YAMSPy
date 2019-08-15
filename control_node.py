@@ -23,11 +23,11 @@ TAKEOFF_LIST = TAKEOFF_LIST.tolist()
 
 '''PID'''
 #Pitch PD Gain 
-PX_GAIN = 40
-DX_GAIN = 40
+PX_GAIN = 10
+DX_GAIN = 0
 #Roll PD Gain
-PY_GAIN = 40
-DY_GAIN = 40
+PY_GAIN = 10
+DY_GAIN = 0
 #Altitude Gain
 PZ_GAIN = 40
 DZ_GAIN = 5#130 * 0.15
@@ -79,9 +79,9 @@ def control_process(*args):
     ''' PID Init '''
     throttle_pd = PID(PZ_GAIN, 0, DZ_GAIN)    #throttle PID
     roll_pd = PID(PY_GAIN, 0, DY_GAIN)        #roll PID
-    pre_y = 0
     pitch_pd = PID(PX_GAIN, 0, DX_GAIN)       #pitch PID
-    pre_x = 0
+    init_x = 0
+    init_y = 0
 
     '''init takeoff'''
     TAKEOFF = True
@@ -89,9 +89,9 @@ def control_process(*args):
     
     prev_altitude_sensor = None
     altitude_sensor = None
+    altitude = None
     altitude_corrected = None
     value_available = False
-    altitude = None
     postition_hold = False
     init_altitude = 0
     prev_time = time.time()
@@ -154,7 +154,7 @@ def control_process(*args):
 
             # '''PID at Throttle'''
             if (not TAKEOFF):
-                error_altitude =  init_altitude - altitude
+                error_altitude =  init_altitude - altitude # altitude
                 next_throttle = throttle_pd.calc(error_altitude, velocity=-velocity) 
                 CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE
                 CMDS['throttle'] += cancel_gravity_value # Constant CG
@@ -168,53 +168,54 @@ def control_process(*args):
             else:
                 # turning the altitdue back to ground, reference as global coordinate
                 altitude_sensor = control_tof_pipe_read.recv()
-                altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) 
+                # h * cos(roll) * cos(pitch)
+                altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180)) * (np.cos(imu[2][1]*np.pi*1/180)) 
                 altitude_corrected = int(altitude_corrected*100)
                 altitude_corrected = altitude_corrected/100  # Truncate 2 d.p.
                 tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
                     
-        # XY hold 
-        # update the filter
-        # if control_optflow_pipe_read.poll():
-        #     KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
-        #     KFXY.update(KFXY_z)
+        '''Update the XY Filter'''
 
-        # dt = time.time()-prev_time
-        # KFXY.F[0,2] = (tof_filter.x[0,0]*dt)
-        # KFXY.F[1,3] = (tof_filter.x[0,0]*dt)
-        # KFXY.B[2,2] = dt
-        # KFXY.B[3,3] = dt
-        # KFXY_u[2,0] = imu[0][0] # ax
-        # KFXY_u[3,0] = imu[0][1] # ay
-        # KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
-    
-        # next_roll = roll_pd.calc((KFXY.x[1,0] - pre_y), velocity=-KFXY.x[3,0]) # Y
-        # next_pitch = pitch_pd.calc((KFXY.x[0,0] - pre_x), velocity=-KFXY.x[2,0]) # X
-        # pre_x = KFXY.x[0,0]
-        # pre_y = KFXY.x[1,0]
-        # CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
-        # CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
-        # value_available = True
-        
-        # This is reading the opticalflow output (around 10Hz)
+        if (not TAKEOFF):
+            if control_optflow_pipe_read.poll():
+                KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
+                KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+            dt = time.time()-prev_time
+            KFXY.F[0,2] = (tof_filter.x[0,0]*dt)
+            KFXY.F[1,3] = (tof_filter.x[0,0]*dt)
+            KFXY.B[2,2] = dt
+            KFXY.B[3,3] = dt
+            KFXY_u[2,0] = imu[0][0] # ax
+            KFXY_u[3,0] = imu[0][1] # ay
+            KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
+            error_roll = (init_y - KFXY.x[1,0])
+            error_pitch =(init_x - KFXY.x[0,0])
+            error_roll = (int(error_roll*100))/100      # Truncate to 2d.p.
+            error_pitch = (int(error_pitch*100))/100    # Truncate to 2d.p.
+            velocity_roll = KFXY.x[3,0]
+            velocity_pitch = KFXY.x[2,0]
+            velocity_roll = (int(velocity_roll*100))/100      # Truncate to 2d.p.
+            velocity_pitch = (int(velocity_pitch*100))/100    # Truncate to 2d.p.
+            next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
+            next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",next_throttle, next_roll, next_pitch)
+            # CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+            # CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
+            # value_available = True
 
-        # save_values.append((tof_filter.x[0,0]*dt, dt, imu[0][0], imu[0][1],KFXY_z))
+            # # This is just to check the speed... (around 2Hz)
+            # if control_cv_pipe_read.poll():
+            #     data_recv = control_cv_pipe_read.recv()
+            #     if data_recv:
+            #         (x_motion, y_motion), area = data_recv
+            #         if y_motion:
+            #             next_roll = -Y_GAIN*y_motion
+            #             CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+            #         if x_motion:
+            #             next_pitch = -X_GAIN*x_motion
+            #             CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
 
-        # # This is just to check the speed... (around 2Hz)
-        # if control_cv_pipe_read.poll():
-        #     data_recv = control_cv_pipe_read.recv()
-        #     if data_recv:
-        #         (x_motion, y_motion), area = data_recv
-
-        #         if y_motion:
-        #             next_roll = -Y_GAIN*y_motion
-        #             CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
-
-        #         if y_motion:
-        #             next_pitch = -X_GAIN*x_motion
-        #             CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
-
-        #         value_available = True
+            #         value_available = True
 
 
         '''Send out the CMDS values back to the joystick loop'''
