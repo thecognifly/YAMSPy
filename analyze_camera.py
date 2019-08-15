@@ -25,8 +25,8 @@ class Flow(io.IOBase):
         self.cols = self.rows = None
 
         # @ Set the calc parameter
-        self.max_flow = (((self.frameWidth) / 16) * ((self.frameHeight) / 16) * 2**7)
-        self.flow  = .165 / self.max_flow
+        self.max_flow = (((self.frameWidth) / 16) * ((self.frameHeight) / 16) * (64+64)) # 128 is the maximum value of the flow (+- 64)
+        self.flow  = 165 / self.max_flow # 165 is flow scale @ meter
 
         # @ Set the motion array parameter
         self.data = None
@@ -62,8 +62,8 @@ class Flow(io.IOBase):
             data = (np.frombuffer(b, dtype=self.motion_dtype).reshape((self.rows, self.cols)))
             x_motion = np.sum(data['x'])*self.flow
             y_motion = np.sum(data['y'])*self.flow
-            x_motion = 0 if abs(x_motion) < 0.1 else x_motion
-            y_motion = 0 if abs(y_motion) < 0.1 else y_motion
+            x_motion = 0 if abs(x_motion) < 0.01 else x_motion # smaller than 1cm, think is noise
+            y_motion = 0 if abs(y_motion) < 0.01 else y_motion
             self.pipe_write.send((x_motion, y_motion))
         if self.DEBUG:
             print("FLOW - Running at %2.2f Hz"%(1/(time.time()-start)))
