@@ -7,32 +7,27 @@ from filterpy.common import Q_discrete_white_noise
 
 from pid import PID
 
-# Basic parameter
-FREQ = 100
-PERIOD = 1/FREQ
-TOFFILTER_FREQ = 20
-ABS_MAX_VALUE_ROLL = 50
-ABS_MAX_VALUE_PITCH = 50
-ABS_MAX_VALUE_THROTTLE = 100
+'''Basic parameter'''
+PERIOD = 1/100               # Sleeping time
+ABS_MAX_VALUE_ROLL = 50      # PID Roll limit
+ABS_MAX_VALUE_PITCH = 50     # PID Pitch limit
+ABS_MAX_VALUE_THROTTLE = 100 # PID Throttle limit
 
-# Take off altitude
-TAKEOFF_ALTITUDE = 1 # m
-TAKEOFF_THRUST = 380 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410
-# weight -> 340
-# 420 is too much for takeoff
-TAKEOFF_LIST = np.zeros(20)
+'''Takeoff parameter'''
+TAKEOFF_ALTITUDE = 0.8#m     # Take off altitude
+TAKEOFF_THRUST = 380 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
+TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
 for t in range(len(TAKEOFF_LIST)):
     TAKEOFF_LIST[t] = ((1-(1/np.exp(t))))# act like a cap-charge shape
 TAKEOFF_LIST = TAKEOFF_LIST.tolist()
 
+'''PID'''
 #Pitch PD Gain 
 PX_GAIN = 40
 DX_GAIN = 40
-
 #Roll PD Gain
 PY_GAIN = 40
 DY_GAIN = 40
-
 #Altitude Gain
 PZ_GAIN = 40
 DZ_GAIN = 5#130 * 0.15
@@ -40,51 +35,37 @@ DZ_GAIN = 5#130 * 0.15
 def control_process(*args):
     
     control_optflow_pipe_read, control_cv_pipe_read, control_tof_pipe_read, control_imu_pipe_read, ext_control_pipe_write, ext_control_pipe_read, nice_level = args
-    
+
     os.nice(nice_level)
     
-    dt = 1/TOFFILTER_FREQ
-    '''
-    ToF Filter
-    '''
-    # Set up the ToF filter
-    tof_filter = KalmanFilter(dim_x = 2, dim_z = 2, dim_u = 1)
-    # Measurement Matrix
-    tof_filter.H = np.array([[1, 0], [0, 1]])
-    # The Sensor Model
-    tof_filter.F = np.array([[1, dt],
-                            [0, 1]])   
-    # Control Matrix
-    tof_filter.B = np.array([[0],
+    '''ToF Filter'''
+    dt = 0.01                                                    # Just random assumation
+    tof_filter = KalmanFilter(dim_x = 2, dim_z = 2, dim_u = 1)   # Set up the ToF filter
+    tof_filter.F = np.array([[1, dt],                            # The Sensor Model
+                             [0, 1]])
+                
+    tof_filter.P = np.diag([0.1, 0.1])                          # covariance matrix
+    tof_filter.B = np.array([[0],                                # Control Matrix
                              [dt]]) 
-    # Process covariance
-    tof_filter.Q = np.diag([0.9, 0.4])
-    # Measurement covariance
-    # Noise of he sensor ~0.01m (1cm)
-    tof_filter.R = np.diag([0.02**2, 0.05**2])
-    
-    '''
-    XY Filter
-    '''
-    # Set up the XY filter
-    KFXY = KalmanFilter(dim_x = 4, dim_z = 2, dim_u = 1)
-
+    tof_filter.H = np.diag([1., 1.])                             # Measurement Matrix
+    tof_filter.Q = np.diag([0.9, 0.4])                           # Process covariance
+    tof_filter.R = np.diag([0.02**2, 0.05**2])                   # Measurement covariance  # Noise of he sensor ~0.01m (1cm)
+   
+    '''XY Filter'''
+    KFXY = KalmanFilter(dim_x = 4, dim_z = 2, dim_u = 1)         # Set up the XY filter
     KFXY.x = np.array([ [0], #dx
                         [0], #dy
                         [0], #vx
-                        [0]],dtype=float)#vy
+                        [0]],#vy
+                        dtype=float)
 
     KFXY.F = np.diag([1., 1., 1., 1.])
-
     KFXY.P = np.diag([.9, .9, 1., 1.])
-
     KFXY.B = np.diag([1., 1., 1., 1.]) 
-
-    KFXY.H = np.array([ [0, 0, 1., 0], 
-                        [0, 0, 0, 1.]]) 
-
-    KFXY.Q = .9
-    KFXY.R = 0.12
+    KFXY.H = np.array([[0, 0, 1., 0], 
+                       [0, 0, 0, 1.]]) 
+    KFXY.Q *= .9
+    KFXY.R *= 0.12
     KFXY_z = np.array([ [0.], # Update value of the XY filter
                         [0.]],dtype=float)
     KFXY_u = np.array([ [0.], # Control input for XY filter
@@ -92,23 +73,19 @@ def control_process(*args):
                         [0.],
                         [0.]],dtype=float)
 
-    # IMU value 
+    '''IMU value init''' 
     imu = [[0,0,0],[0,0,0],[0,0,0]]
 
-    '''
-    PID
-    '''
-    #throttle PID
-    throttle_pd = PID(PZ_GAIN, 0, DZ_GAIN)
-    #roll PID
-    roll_pd = PID(PY_GAIN, 0, DY_GAIN)
+    ''' PID Init '''
+    throttle_pd = PID(PZ_GAIN, 0, DZ_GAIN)    #throttle PID
+    roll_pd = PID(PY_GAIN, 0, DY_GAIN)        #roll PID
     pre_y = 0
-    #pitch PID
-    pitch_pd = PID(PX_GAIN, 0, DX_GAIN)
+    pitch_pd = PID(PX_GAIN, 0, DX_GAIN)       #pitch PID
     pre_x = 0
 
-    # init takeoff
+    '''init takeoff'''
     TAKEOFF = True
+
     
     prev_altitude_sensor = None
     altitude_sensor = None
@@ -119,86 +96,81 @@ def control_process(*args):
     init_altitude = 0
     prev_time = time.time()
 
+    '''CMDS init'''
     CMDS = {
             'throttle': 0,
             'roll':     0,
-            'pitch':    0
-    }
+            'pitch':    0}
+
     while True:
         CMDS['throttle'] = 0
         CMDS['roll']     = 0
         CMDS['pitch']    = 0
-        # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", altitude_sensor)
 
+        '''Read the joystick_node trigger the auto mode or not'''
         if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
             postition_hold = ext_control_pipe_write.recv()
             if not postition_hold:
                 init_altitude = None                    
-                # np.save("/home/pi/saved_data", save_values)
-            
+        
+        '''Update the IMU value'''
         if control_imu_pipe_read.poll():
             imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
 
+        '''Update the ToF Kalman Filter with the ground value'''
         if postition_hold and altitude_sensor:
             # Remember to reset integrator here too!
             prev_altitude_sensor = init_altitude = altitude_sensor
             postition_hold = False
-
             # initial value from the sensor
             # the cognifly have the initial heigth of 0.11m
             tof_filter.x = np.array([[init_altitude], 
                                     [0]]) 
-            # covariance matrix
-            tof_filter.P = np.array([[0.1, 0],
-                                     [0, 0.1]])
             continue
 
-        # Altitude hold
+        '''Vertical Movement Control'''
         if init_altitude:
-            # This is reading the ToF output
+            # Update the ToF Filter
             dt = time.time()-prev_time
             tof_filter.F[0,1] = dt
             tof_filter.B[0] = 0.5*(dt**2)
             tof_filter.B[1] = dt
             tof_filter.predict(u = 0) #Just test for non -9.81*(0.99-imu[0][2])
+            # Capture the Predicted value
             altitude = tof_filter.x[0,0]
             velocity = tof_filter.x[1,0]
             
-            # Takeoff 
+            # '''Takeoff Setting''' 
             if TAKEOFF:
                 if len(TAKEOFF_LIST):
-                    CMDS['throttle'] = TAKEOFF_LIST[0]*TAKEOFF_THRUST
-                    # TAKEOFF_LIST = np.delete(TAKEOFF_LIST, 0)
+                    CMDS['throttle'] = TAKEOFF_LIST[0] * TAKEOFF_THRUST
                     value_available = True
                     TAKEOFF_LIST.pop(0)
                     cancel_gravity_value = CMDS['throttle']
                 else:
-                    print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Reached")
-                    init_altitude = 0.5 #altitude   
+                    init_altitude = TAKEOFF_ALTITUDE 
                     velocity = 0
                     TAKEOFF = False
-                        
-            # print("altitude,velocity,sensor", altitude, velocity, altitude_sensor)
-            # save_values.append([dt, altitude, velocity, altitude_sensor,-9.81*(0.99-imu[0][2])])
-            
-            error_altitude =  init_altitude - altitude
-            next_throttle = throttle_pd.calc(error_altitude, velocity=-velocity) 
+
+            # '''PID at Throttle'''
             if (not TAKEOFF):
+                error_altitude =  init_altitude - altitude
+                next_throttle = throttle_pd.calc(error_altitude, velocity=-velocity) 
                 CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE
                 CMDS['throttle'] += cancel_gravity_value # Constant CG
                 value_available = True 
                 prev_altitude_sensor = altitude_corrected
-                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", CMDS['throttle'], next_throttle,  error_altitude, velocity)
                 
+        '''Update the ToF value'''
         if control_tof_pipe_read.poll():
             if not init_altitude:
-                altitude_sensor = control_tof_pipe_read.recv()
+                altitude_sensor = control_tof_pipe_read.recv() # Flushing the old value 
             else:
+                # turning the altitdue back to ground, reference as global coordinate
                 altitude_sensor = control_tof_pipe_read.recv()
-                altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) # turning the altitdue back to ground
+                altitude_corrected =  altitude_sensor * (np.cos(imu[2][0]*np.pi*1/180))* (np.cos(imu[2][1]*np.pi*1/180)) 
                 altitude_corrected = int(altitude_corrected*100)
                 altitude_corrected = altitude_corrected/100  # Truncate 2 d.p.
-                # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", CMDS['throttle'], next_throttle,  error_altitude, velocity)
                 tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
                     
         # XY hold 
@@ -245,6 +217,7 @@ def control_process(*args):
         #         value_available = True
 
 
+        '''Send out the CMDS values back to the joystick loop'''
         if value_available and (not ext_control_pipe_read.poll()):
             ext_control_pipe_write.send(CMDS)
             value_available = False
