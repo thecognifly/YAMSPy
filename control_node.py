@@ -14,7 +14,7 @@ ABS_MAX_VALUE_PITCH = 30     # PID Pitch limit
 ABS_MAX_VALUE_THROTTLE = 100 # PID Throttle limit
 
 '''Takeoff parameter'''
-TAKEOFF_ALTITUDE = 0.7#m     # Take off altitude
+TAKEOFF_ALTITUDE = 0.2#m     # Take off altitude
 TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
 TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
 for t in range(len(TAKEOFF_LIST)):
@@ -26,11 +26,12 @@ TAKEOFF_LIST = TAKEOFF_LIST.tolist()
 PX_GAIN = 10
 DX_GAIN = 0
 #Roll PD Gain
-PY_GAIN = 10
+PY_GAIN = 100
 DY_GAIN = 0
 #Altitude Gain
-PZ_GAIN = 40
-DZ_GAIN = 5#130 * 0.15
+PZ_GAIN = 60
+IZ_GAIN = 5
+DZ_GAIN = 5 #130 * 0.15
 
 def control_process(*args):
     
@@ -77,7 +78,7 @@ def control_process(*args):
     imu = [[0,0,0],[0,0,0],[0,0,0]]
 
     ''' PID Init '''
-    throttle_pd = PID(PZ_GAIN, 0, DZ_GAIN)    #throttle PID
+    throttle_pd = PID(PZ_GAIN, IZ_GAIN, DZ_GAIN)    #throttle PID
     roll_pd = PID(PY_GAIN, 0, DY_GAIN)        #roll PID
     pitch_pd = PID(PX_GAIN, 0, DX_GAIN)       #pitch PID
     init_x = 0
@@ -118,7 +119,7 @@ def control_process(*args):
             imu, battery_voltage = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
             if TAKEOFF:
                 TAKEOFF_THRUST = int(1015-53*(battery_voltage))
-                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",TAKEOFF_THRUST, battery_voltage)
+                # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",TAKEOFF_THRUST, battery_voltage)
 
         '''Update the ToF Kalman Filter with the ground value'''
         if postition_hold and altitude_sensor:
@@ -158,7 +159,7 @@ def control_process(*args):
             # '''PID at Throttle'''
             if (not TAKEOFF):
                 error_altitude =  init_altitude - altitude # altitude
-                next_throttle = throttle_pd.calc(error_altitude, velocity=-velocity) 
+                next_throttle = throttle_pd.calc(error_altitude, time = dt, velocity=-velocity) 
                 CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE
                 CMDS['throttle'] += cancel_gravity_value # Constant CG
                 value_available = True 
@@ -179,6 +180,7 @@ def control_process(*args):
                     
         '''Update the XY Filter'''
 
+        # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
         if (not TAKEOFF):
             if control_optflow_pipe_read.poll():
                 KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
@@ -188,8 +190,8 @@ def control_process(*args):
             KFXY.F[1,3] = (tof_filter.x[0,0]*dt)
             KFXY.B[2,2] = dt
             KFXY.B[3,3] = dt
-            KFXY_u[2,0] = imu[0][0] # ax
-            KFXY_u[3,0] = imu[0][1] # ay
+            KFXY_u[2,0] = 0 #imu[0][0] # ax
+            KFXY_u[3,0] = 0 #imu[0][1] # ay
             KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
             error_roll = (init_y - KFXY.x[1,0])
             error_pitch =(init_x - KFXY.x[0,0])
@@ -201,9 +203,8 @@ def control_process(*args):
             velocity_pitch = (int(velocity_pitch*100))/100    # Truncate to 2d.p.
             next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
             next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
-            # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",error_roll, velocity_roll, next_roll)
-            print(error_pitch, velocity_pitch, next_pitch)
-            # CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+            CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",error_roll, velocity_roll, next_roll)
             # CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
             # value_available = True
 
