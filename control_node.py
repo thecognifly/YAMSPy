@@ -9,13 +9,13 @@ from pid import PID
 
 '''Basic parameter'''
 PERIOD = 1/100               # Sleeping time
-ABS_MAX_VALUE_ROLL = 50      # PID Roll limit
-ABS_MAX_VALUE_PITCH = 50     # PID Pitch limit
+ABS_MAX_VALUE_ROLL = 30      # PID Roll limit
+ABS_MAX_VALUE_PITCH = 30     # PID Pitch limit
 ABS_MAX_VALUE_THROTTLE = 100 # PID Throttle limit
 
 '''Takeoff parameter'''
-TAKEOFF_ALTITUDE = 0.8#m     # Take off altitude
-TAKEOFF_THRUST = 380 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
+TAKEOFF_ALTITUDE = 0.7#m     # Take off altitude
+TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
 TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
 for t in range(len(TAKEOFF_LIST)):
     TAKEOFF_LIST[t] = ((1-(1/np.exp(t))))# act like a cap-charge shape
@@ -115,7 +115,10 @@ def control_process(*args):
         
         '''Update the IMU value'''
         if control_imu_pipe_read.poll():
-            imu = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
+            imu, battery_voltage = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
+            if TAKEOFF:
+                TAKEOFF_THRUST = int(1015-53*(battery_voltage))
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",TAKEOFF_THRUST, battery_voltage)
 
         '''Update the ToF Kalman Filter with the ground value'''
         if postition_hold and altitude_sensor:
@@ -198,7 +201,8 @@ def control_process(*args):
             velocity_pitch = (int(velocity_pitch*100))/100    # Truncate to 2d.p.
             next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
             next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",next_throttle, next_roll, next_pitch)
+            # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",error_roll, velocity_roll, next_roll)
+            print(error_pitch, velocity_pitch, next_pitch)
             # CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
             # CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
             # value_available = True
