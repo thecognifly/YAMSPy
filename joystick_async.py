@@ -342,6 +342,8 @@ async def read_voltage_from_fc(dev):
 
     global mean_voltage, min_voltage
 
+    SIZE_AVG_VOLTAGE = 30
+
     command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
                     'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
                     'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES', 'MSP_ANALOG']
@@ -358,7 +360,7 @@ async def read_voltage_from_fc(dev):
         warn_voltage = board.BATTERY_CONFIG['vbatwarningcellvoltage']*board.BATTERY_STATE['cellCount']
         max_voltage = board.BATTERY_CONFIG['vbatmaxcellvoltage']*board.BATTERY_STATE['cellCount']
         voltage = board.ANALOG['voltage']
-        avg_voltage_deque = deque([voltage]*5)
+        avg_voltage_deque = deque([voltage]*SIZE_AVG_VOLTAGE)
 
     # dataReady = False
     prev_time = time.time()
@@ -378,7 +380,7 @@ async def read_voltage_from_fc(dev):
         avg_voltage_deque.appendleft(voltage)
         avg_voltage_deque.pop()
 
-        mean_voltage = sum(avg_voltage_deque)/5
+        mean_voltage = sum(avg_voltage_deque)/SIZE_AVG_VOLTAGE
         if mean_voltage <= min_voltage:
             dev.write(ecodes.EV_FF, effect_id, 5)
         elif mean_voltage >= max_voltage:
