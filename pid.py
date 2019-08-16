@@ -44,7 +44,7 @@ class PID():
         self.error_pre = self.error
         self.error = data
         if velocity is not None:
-            return (self.p() + (self.kd*velocity))
+            return (self.p() + self.i() + (self.kd*velocity))
         elif self.error_pre:
              return (self.p() + self.i() + self.d())
         else:
