@@ -10,11 +10,12 @@ from pid import PID
 '''Basic parameter'''
 PERIOD = 1/100               # Sleeping time
 ABS_MAX_VALUE_ROLL = 30      # PID Roll limit
-ABS_MAX_VALUE_PITCH = 30     # PID Pitch limit
+ABS_MAX_VALUE_PITCH = 150     # PID Pitch limit
 ABS_MAX_VALUE_THROTTLE = 100 # PID Throttle limit
+OF_VELOCITY_FILTER = 0.6     # Ignore the optical flow when veritcal speed higher than 0.6m/s
 
 '''Takeoff parameter'''
-TAKEOFF_ALTITUDE = 0.2#m     # Take off altitude
+TAKEOFF_ALTITUDE = 0.6#m     # Take off altitude
 TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
 TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
 for t in range(len(TAKEOFF_LIST)):
@@ -23,15 +24,15 @@ TAKEOFF_LIST = TAKEOFF_LIST.tolist()
 
 '''PID'''
 #Pitch PD Gain 
-PX_GAIN = 10
+PX_GAIN = 120
 DX_GAIN = 0
 #Roll PD Gain
-PY_GAIN = 100
+PY_GAIN = 30
 DY_GAIN = 0
 #Altitude Gain
 PZ_GAIN = 60
-IZ_GAIN = 5
-DZ_GAIN = 5 #130 * 0.15
+IZ_GAIN = 0.1
+DZ_GAIN = 10
 
 def control_process(*args):
     
@@ -119,7 +120,6 @@ def control_process(*args):
             imu, battery_voltage = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
             if TAKEOFF:
                 TAKEOFF_THRUST = int(1015-53*(battery_voltage))
-                # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",TAKEOFF_THRUST, battery_voltage)
 
         '''Update the ToF Kalman Filter with the ground value'''
         if postition_hold and altitude_sensor:
@@ -169,6 +169,7 @@ def control_process(*args):
         if control_tof_pipe_read.poll():
             if not init_altitude:
                 altitude_sensor = control_tof_pipe_read.recv() # Flushing the old value 
+                # altitude_sensor = control_tof_pipe_read.recv() # Flushing the old value 
             else:
                 # turning the altitdue back to ground, reference as global coordinate
                 altitude_sensor = control_tof_pipe_read.recv()
@@ -187,12 +188,14 @@ def control_process(*args):
             KFXY.F[1,3] = altitude*dt
             KFXY.B[2,2] = dt
             KFXY.B[3,3] = dt
-            KFXY_u[2,0] = 0 #imu[0][0] # ax
+            KFXY_u[2,0] = 9.81*(int(imu[0][0]*100)/100)*np.cos(imu[2][1]) #imu[0][0] # ax
             KFXY_u[3,0] = 0 #imu[0][1] # ay
             if control_optflow_pipe_read.poll():
-                KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
+                # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
                 KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
-                KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+                if (abs(velocity)>OF_VELOCITY_FILTER):
+                    KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+            
             KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
 
             '''X-Y control'''
@@ -207,10 +210,12 @@ def control_process(*args):
             next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
             next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
             CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
+            CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
             print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>KF\n",KFXY_z[0,0])
-            print("\n", error_roll, velocity_roll, next_roll)
-            # CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
-            # value_available = True
+            print("\n", error_pitch, velocity_pitch, next_pitch)
+            print("\n", imu[0])
+            print("\n,  PITCH/ROLL", 9.81*(int(imu[0][0]*100)/100)*np.cos(imu[2][1]), 9.81*(int(imu[0][1]*100)/100)*np.cos(imu[2][0]))
+            value_available = True
 
             # # This is just to check the speed... (around 2Hz)
             # if control_cv_pipe_read.poll():
