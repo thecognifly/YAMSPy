@@ -182,9 +182,6 @@ def control_process(*args):
 
         # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
         if (not TAKEOFF):
-            if control_optflow_pipe_read.poll():
-                KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
-                KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
             dt = time.time()-prev_time
             KFXY.F[0,2] = (altitude*dt)
             KFXY.F[1,3] = (altitude*dt)
@@ -192,6 +189,10 @@ def control_process(*args):
             KFXY.B[3,3] = dt
             KFXY_u[2,0] = 0 #imu[0][0] # ax
             KFXY_u[3,0] = 0 #imu[0][1] # ay
+            if control_optflow_pipe_read.poll():
+                KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
+                KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
+                KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
             KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
             error_roll = (init_y - KFXY.x[1,0])
             error_pitch =(init_x - KFXY.x[0,0])
