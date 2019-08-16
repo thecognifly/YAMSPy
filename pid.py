@@ -4,7 +4,7 @@ class PID():
     @ MistLab
     '''
 
-    def __init__(self, kp, ki, kd):
+    def __init__(self, kp, ki, kd, I_LIMIT = 100):
         # @ gain of Proportional 
         self.kp = kp
         # @ gain of Integration 
@@ -13,6 +13,8 @@ class PID():
         self.kd = kd
         # @ Sum of Integration
         self.integral = 0
+        # @THRESHOLD for integrator
+        self.integral_threshold = I_LIMIT
         # @ Error input
         self.error = None
         # @ Previous error for derivative 
@@ -25,7 +27,7 @@ class PID():
     
     def i(self):
         self.integral += (self.ki * self.error / self.dt)
-        return (self.integral)
+        return (self.integral) if abs(self.integral) < self.integral_threshold else (-1 if self.integral < 0 else 1)*self.integral_threshold
     
     def d(self):
         return (self.kd * (self.error - self.error_pre) / self.dt )
