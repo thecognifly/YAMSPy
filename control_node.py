@@ -194,6 +194,8 @@ def control_process(*args):
                 KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
                 KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
             KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
+
+            '''X-Y control'''
             error_roll = (init_y - KFXY.x[1,0])
             error_pitch =(init_x - KFXY.x[0,0])
             error_roll = (int(error_roll*100))/100      # Truncate to 2d.p.
@@ -205,7 +207,8 @@ def control_process(*args):
             next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
             next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
             CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",error_roll, velocity_roll, next_roll)
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>KF\n",KFXY_z[0,0])
+            print("\n", error_roll, velocity_roll, next_roll)
             # CMDS['pitch'] = -next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
             # value_available = True
 
