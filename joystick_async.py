@@ -65,7 +65,7 @@ READ_VOLT_FC_FREQ = 1
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['roll', 'throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['pitch','throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
@@ -155,6 +155,25 @@ async def joystick_interface(dev, ext_contr_pipe = None):
     prev_time_ext = time.time()
     while not shutdown:
         try:
+            if ext_contr_pipe: 
+                # process info from external controller
+                if ext_contr_pipe.poll():
+                    cmds_pipe = ext_contr_pipe.recv()
+                    if ('pitch' in AUTONOMOUS_INPUT):
+                        # The received commands will always actuate around the center positions
+                        if abs(cmds_pipe['pitch']) > 0.0: # keeps the last command
+                            CMDS['pitch'] = CMDS_init['pitch'] + cmds_pipe['pitch']
+                    if ('roll' in AUTONOMOUS_INPUT):
+                        if abs(cmds_pipe['roll']) > 0.0: # keeps the last command
+                            CMDS['roll'] = CMDS_init['roll'] + cmds_pipe['roll']
+                    if ('throttle' in AUTONOMOUS_INPUT):
+                        if abs(cmds_pipe['throttle']) > 0.0: # keeps the last command
+                            # For the throttle it will need to use the last value
+                            # to keep the altitude
+                            CMDS['throttle'] = last_throttle + cmds_pipe['throttle']
+
+                    frequencies_measurement['autonomous'] = time.time() - prev_time_ext
+                    prev_time_ext = time.time()
             events = dev.read()
             # This seems to be the best option, but it raises BlockinIOError when I try to process
             # events and there's none
@@ -203,27 +222,6 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                             reboot_event[1] = True
                         else:
                             reboot_event[1] = False
-
-                if ext_contr_pipe: 
-                    # process info from external controller
-                    if ext_contr_pipe.poll():
-                        cmds_pipe = ext_contr_pipe.recv()
-                        if ('pitch' in AUTONOMOUS_INPUT):
-                            # The received commands will always actuate around the center positions
-                            if abs(cmds_pipe['pitch']) > 0.0: # keeps the last command
-                                CMDS['pitch'] = CMDS_init['pitch'] + cmds_pipe['pitch']
-                        if ('roll' in AUTONOMOUS_INPUT):
-                            if abs(cmds_pipe['roll']) > 0.0: # keeps the last command
-                                CMDS['roll'] = CMDS_init['roll'] + cmds_pipe['roll']
-                        if ('throttle' in AUTONOMOUS_INPUT):
-                            if abs(cmds_pipe['throttle']) > 0.0: # keeps the last command
-                                # For the throttle it will need to use the last value
-                                # to keep the altitude
-                                CMDS['throttle'] = last_throttle + cmds_pipe['throttle']
-
-                        frequencies_measurement['autonomous'] = time.time() - prev_time_ext
-                        prev_time_ext = time.time()
-
 
                 if event.type == 1:
                     if event.value == 1:
