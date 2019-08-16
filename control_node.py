@@ -65,8 +65,8 @@ def control_process(*args):
     KFXY.B = np.diag([1., 1., 1., 1.]) 
     KFXY.H = np.array([[0, 0, 1., 0], 
                        [0, 0, 0, 1.]]) 
-    KFXY.Q *= .9
-    KFXY.R *= 0.12
+    KFXY.Q *= 0.01
+    KFXY.R *= 0.01
     KFXY_z = np.array([ [0.], # Update value of the XY filter
                         [0.]],dtype=float)
     KFXY_u = np.array([ [0.], # Control input for XY filter
