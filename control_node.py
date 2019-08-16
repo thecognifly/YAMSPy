@@ -60,7 +60,7 @@ def control_process(*args):
                         [0]],#vy
                         dtype=float)
 
-    KFXY.F = np.diag([1., 1., 1., 1.])
+    KFXY.F = np.array([1., 1., 1., 1.])
     KFXY.P = np.diag([.9, .9, 1., 1.])
     KFXY.B = np.diag([1., 1., 1., 1.]) 
     KFXY.H = np.array([[0, 0, 1., 0], 
@@ -186,8 +186,8 @@ def control_process(*args):
                 KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
                 KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
             dt = time.time()-prev_time
-            KFXY.F[0,2] = (tof_filter.x[0,0]*dt)
-            KFXY.F[1,3] = (tof_filter.x[0,0]*dt)
+            KFXY.F[0,2] = (altitude*dt)
+            KFXY.F[1,3] = (altitude*dt)
             KFXY.B[2,2] = dt
             KFXY.B[3,3] = dt
             KFXY_u[2,0] = 0 #imu[0][0] # ax
