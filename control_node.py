@@ -9,13 +9,13 @@ from pid import PID
 
 '''Basic parameter'''
 PERIOD = 1/100               # Sleeping time
-ABS_MAX_VALUE_ROLL = 30      # PID Roll limit
+ABS_MAX_VALUE_ROLL = 150      # PID Roll limit
 ABS_MAX_VALUE_PITCH = 150     # PID Pitch limit
 ABS_MAX_VALUE_THROTTLE = 100 # PID Throttle limit
-OF_VELOCITY_FILTER = 0.6     # Ignore the optical flow when veritcal speed higher than 0.6m/s
+OF_VELOCITY_FILTER = 0.8     # Ignore the optical flow when veritcal speed higher than 0.6m/s
 
 '''Takeoff parameter'''
-TAKEOFF_ALTITUDE = 0.6#m     # Take off altitude
+TAKEOFF_ALTITUDE = 1#m     # Take off altitude
 TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
 TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
 for t in range(len(TAKEOFF_LIST)):
@@ -23,16 +23,18 @@ for t in range(len(TAKEOFF_LIST)):
 TAKEOFF_LIST = TAKEOFF_LIST.tolist()
 
 '''PID'''
-#Pitch PD Gain 
-PX_GAIN = 120
-DX_GAIN = 0
+#Pitch PD G0
+PX_GAIN = 25
+IX_GAIN = 0.05
+DX_GAIN = 15
 #Roll PD Gain
-PY_GAIN = 30
-DY_GAIN = 0
+PY_GAIN = 25
+IY_GAIN = 0.05
+DY_GAIN = 15
 #Altitude Gain
 PZ_GAIN = 60
-IZ_GAIN = 0.1
-DZ_GAIN = 10
+IZ_GAIN = 0.004
+DZ_GAIN = 8 # not correct
 
 def control_process(*args):
     
@@ -80,8 +82,8 @@ def control_process(*args):
 
     ''' PID Init '''
     throttle_pd = PID(PZ_GAIN, IZ_GAIN, DZ_GAIN)    #throttle PID
-    roll_pd = PID(PY_GAIN, 0, DY_GAIN)        #roll PID
-    pitch_pd = PID(PX_GAIN, 0, DX_GAIN)       #pitch PID
+    roll_pd = PID(PY_GAIN, IY_GAIN, DY_GAIN)        #roll PID
+    pitch_pd = PID(PX_GAIN, IX_GAIN, DX_GAIN)       #pitch PID
     init_x = 0
     init_y = 0
 
@@ -163,6 +165,8 @@ def control_process(*args):
                 CMDS['throttle'] = next_throttle if abs(next_throttle) <= ABS_MAX_VALUE_THROTTLE else (-1 if next_throttle < 0 else 1)*ABS_MAX_VALUE_THROTTLE
                 CMDS['throttle'] += cancel_gravity_value # Constant CG
                 value_available = True 
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>THR ",next_throttle, init_altitude)
+                print("\n", error_altitude, velocity)
                 prev_altitude_sensor = altitude_corrected
                 
         '''Update the ToF value'''
@@ -211,11 +215,11 @@ def control_process(*args):
             next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
             CMDS['roll'] = next_roll if abs(next_roll) <= ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*ABS_MAX_VALUE_ROLL 
             CMDS['pitch'] = next_pitch if abs(next_pitch) <= ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*ABS_MAX_VALUE_PITCH 
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>KF\n",KFXY_z[0,0])
-            print("\n", error_pitch, velocity_pitch, next_pitch)
+            value_available = True
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>KF",next_pitch, next_roll)
+            print("\n", error_roll, velocity_roll, next_roll)
             print("\n", imu[0])
             print("\n,  PITCH/ROLL", 9.81*(int(imu[0][0]*100)/100)*np.cos(imu[2][1]), 9.81*(int(imu[0][1]*100)/100)*np.cos(imu[2][0]))
-            value_available = True
 
             # # This is just to check the speed... (around 2Hz)
             # if control_cv_pipe_read.poll():
