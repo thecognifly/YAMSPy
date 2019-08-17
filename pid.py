@@ -27,7 +27,12 @@ class PID():
     
     def i(self):
         self.integral += (self.ki * self.error / self.dt)
-        return (self.integral) if abs(self.integral) < self.integral_threshold else (-1 if self.integral < 0 else 1)*self.integral_threshold
+        if abs(self.integral) > self.integral_threshold:
+            if self.integral < 0:
+                self.integral = -self.integral_threshold
+            else:
+                self.integral = self.integral_threshold
+        return (self.integral)
     
     def d(self):
         return (self.kd * (self.error - self.error_pre) / self.dt )
