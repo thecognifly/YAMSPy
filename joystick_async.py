@@ -65,13 +65,13 @@ READ_VOLT_FC_FREQ = 1
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['pitch','throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['roll', 'pitch', 'throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
         'roll':     1500,
         'pitch':    1500,
-        'throttle': 900,
+        'throttle': 1000,
         'yaw':      1500,
         'aux1':     1000, # DISARMED (1000) / ARMED (1800)
         'aux2':     1000, # ANGLE (1000) / HORIZON (1500) / FLIP (1800)
@@ -161,17 +161,16 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                     cmds_pipe = ext_contr_pipe.recv()
                     if ('pitch' in AUTONOMOUS_INPUT):
                         # The received commands will always actuate around the center positions
-                        if abs(cmds_pipe['pitch']) > 0.0: # keeps the last command
+                        if abs(cmds_pipe['pitch']) >= 0.0: # keeps the last command
                             CMDS['pitch'] = CMDS_init['pitch'] + cmds_pipe['pitch']
                     if ('roll' in AUTONOMOUS_INPUT):
-                        if abs(cmds_pipe['roll']) > 0.0: # keeps the last command
+                        if abs(cmds_pipe['roll']) >= 0.0: # keeps the last command
                             CMDS['roll'] = CMDS_init['roll'] + cmds_pipe['roll']
                     if ('throttle' in AUTONOMOUS_INPUT):
-                        if abs(cmds_pipe['throttle']) > 0.0: # keeps the last command
+                        if abs(cmds_pipe['throttle']) >= 0.0: # keeps the last command
                             # For the throttle it will need to use the last value
                             # to keep the altitude
-                            CMDS['throttle'] = last_throttle + cmds_pipe['throttle']
-
+                            CMDS['throttle'] = CMDS_init['throttle'] + cmds_pipe['throttle']
                     frequencies_measurement['autonomous'] = time.time() - prev_time_ext
                     prev_time_ext = time.time()
             events = dev.read()
@@ -205,7 +204,6 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                         if ('throttle' not in AUTONOMOUS_INPUT) or not autonomous:
                             # UP / DOWN: code 01 val from 255 (down) to 0 (up)
                             CMDS['throttle'] = 1000+1000*(255-event.value)/255 # LEFT up / down
-                            last_throttle = CMDS['throttle']
                     elif event.code == 0:
                         if ('yaw' not in AUTONOMOUS_INPUT) or not autonomous:
                             if not headfree:
@@ -281,7 +279,6 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                     # altitude
                                     ext_contr_pipe.send(True)
                                 print('>>>>>>>>>>>>>AUTONOMOUS MODE...')
-                                # CMDS['throttle'] = last_throttle
                                 dev.write(ecodes.EV_FF, effect_id, 5) # vibrate for longer here
                             else:
                                 autonomous = False
@@ -291,7 +288,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                     ext_contr_pipe.send(False)
                                 CMDS['roll'] = CMDS_init['roll']
                                 CMDS['pitch'] = CMDS_init['pitch']
-                                CMDS['throttle'] = last_throttle
+                                CMDS['throttle'] = CMDS_init['throttle']
                                 CMDS['yaw'] = CMDS_init['yaw']
                                 print('>>>>>>>>>>>>>MANUAL MODE...')
                                 dev.write(ecodes.EV_FF, effect_id, 1)
