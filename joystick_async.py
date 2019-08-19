@@ -48,7 +48,7 @@ from camera import Camera
 
 from tof_node import ToF
 
-import control_node
+from control_node import control
 
 """
 $ sudo find /. -name "evtest.py"
@@ -491,8 +491,9 @@ if __name__ == '__main__':
     # nice_level > -10
     # control_pipe_in: receive velocities from opticalflow
     # ext_control_pipe_read: write throttle, yaw, roll and pitch to main node.
+    control = control()
     nice_level_control = 10
-    control_process = Process(target=control_node.control_process, 
+    control_process = Process(target=control.control_process, 
                               args=(control_optflow_pipe_read, 
                                     control_cv_pipe_read,
                                     control_tof_pipe_read,
