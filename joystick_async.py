@@ -65,7 +65,7 @@ READ_VOLT_FC_FREQ = 1
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['roll','throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
@@ -510,7 +510,7 @@ if __name__ == '__main__':
                     frameHeight=240,
                     frameRate=30,
                     DEBUG=False)
-    nice_level_cam = 10
+    nice_level_cam = 5
     camera_process = Process(target=camera.run, args=(nice_level_cam,))
     
     # nice_level > nice_level_control_node
