@@ -167,6 +167,7 @@ class Poss(io.IOBase):
             '''
             Act like a file-like class
             '''
+            prev_time = time.time()
             if self.DEBUG:
                 start = time.time()
             # b is the numpy array of the image, 3 bytes of color depth
@@ -184,7 +185,7 @@ class Poss(io.IOBase):
                         # Capture feature
                         kq, dq = self.fea_det.detectAndCompute(self.imgNow, None) 
                         kt, dt = self.fea_det.detectAndCompute(img, None)
-                        self.pipe_write.send(self.BF_filter(kt, dt, kq, dq))
+                        self.pipe_write.send(self.BF_filter(kt, dt, kq, dq), time.time()-prev_time)
                         self.imgNow = img
                     except:
                         pass
