@@ -13,13 +13,13 @@ class control():
         ''' Define all the parameter'''
         '''Basic parameter'''''
         self.PERIOD = 1/100               # Sleeping time
-        self.ABS_MAX_VALUE_ROLL = 150      # PID Roll limit
-        self.ABS_MAX_VALUE_PITCH = 150     # PID Pitch limit
+        self.ABS_MAX_VALUE_ROLL = 100      # PID Roll limit
+        self.ABS_MAX_VALUE_PITCH = 100     # PID Pitch limit
         self.ABS_MAX_VALUE_THROTTLE = 100 # PID Throttle limit
         self.OF_VELOCITY_FILTER = 0.8     # Ignore the optical flow when veritcal speed higher than 0.6m/s
 
         '''Takeoff parameter'''
-        self.TAKEOFF_ALTITUDE = 1#m     # Take off altitude
+        self.TAKEOFF_ALTITUDE = 0.95#m     # Take off altitude
         self.TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
         self.TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
         for t in range(len(self.TAKEOFF_LIST)):
@@ -35,13 +35,13 @@ class control():
         self.IX_GAIN = 0.05
         self.DX_GAIN = 15
         #Roll PD Gain
-        self.PY_GAIN = 25
+        self.PY_GAIN = 55
         self.IY_GAIN = 0.05
         self.DY_GAIN = 15
-        #Altitude Gain
-        self.PZ_GAIN = 60
-        self.IZ_GAIN = 0.004
-        self.DZ_GAIN = 8 # not correct
+        #Altitude PID Gain
+        self.PZ_GAIN = 50
+        self.IZ_GAIN = 0.01
+        self.DZ_GAIN = 3 # not correct
                 
         '''IMU value init''' 
         self.imu = [[0,0,0],[0,0,0],[0,0,0]]
@@ -64,10 +64,10 @@ class control():
     def xy_filter_init(self):
         '''XY Filter'''
         KFXY = KalmanFilter(dim_x = 4, dim_z = 2, dim_u = 1)         # Set up the XY filter
-        KFXY.x = np.array([ [0], #dx
-                            [0], #dy
-                            [0], #vx
-                            [0]],#vy
+        KFXY.x = np.array([ [0], #dx(pitch)
+                            [0], #dy(roll)
+                            [0], #vx(pitch)
+                            [0]],#vy(roll)
                             dtype=float)
 
         KFXY.F = np.diag([1., 1., 1., 1.])
@@ -147,7 +147,7 @@ class control():
                 self.imu, battery_voltage = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
                 if self.TAKEOFF:
                     # Tested voltage throttle relationship
-                    TAKEOFF_THRUST = int(1015-53*(battery_voltage))
+                    TAKEOFF_THRUST = int(1015-55*(battery_voltage))
 
             '''Update the ToF Kalman Filter with the ground value'''
             if postition_hold and altitude_sensor:
@@ -182,7 +182,7 @@ class control():
                     else:
                         init_altitude = self.TAKEOFF_ALTITUDE 
                         velocity = 0
-                        TAKEOFF = False
+                        self.TAKEOFF = False
 
                 # '''PID at Throttle'''
                 if (not self.TAKEOFF):
@@ -191,9 +191,9 @@ class control():
                     CMDS['throttle'] = self.value_limit(next_throttle, self.ABS_MAX_VALUE_THROTTLE)
                     CMDS['throttle'] += cancel_gravity_value # Constant CG
                     value_available = True 
+                    prev_altitude_sensor = altitude_corrected
                     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>THR ",next_throttle, init_altitude)
                     print("\n", error_altitude, velocity)
-                    prev_altitude_sensor = altitude_corrected
                     
             '''Update the ToF value'''
             if control_tof_pipe_read.poll():
@@ -210,7 +210,7 @@ class control():
             '''Update the XY Filter'''
 
             # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
-            if (not TAKEOFF):
+            if (not self.TAKEOFF):
                 dt = time.time()-prev_time
                 KFXY.F[0,2] = altitude*dt
                 KFXY.F[1,3] = altitude*dt
@@ -233,14 +233,17 @@ class control():
                 error_pitch =self.truncate(init_x - KFXY.x[0,0])
                 velocity_roll = self.truncate(KFXY.x[3,0])
                 velocity_pitch = self.truncate(KFXY.x[2,0])
+                # velocity_roll =  self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt))
+                # velocity_pitch = self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt))
                 next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
                 next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
                 CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
                 CMDS['pitch'] = next_pitch if abs(next_pitch) <= self.ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*self.ABS_MAX_VALUE_PITCH 
                 value_available = True
                 print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-                print("ROLL: ", -velocity_roll, (self.imu[2][0]*altitude/dt))
-                print("PITCH", -velocity_pitch, (self.imu[2][1]*altitude/dt))
+                print("ERROR:", error_roll, next_roll)
+                print("ROLL: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
+                print("PITCH ", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
 
                 # # This is just to check the speed... (around 2Hz)
                 # if control_cv_pipe_read.poll():
