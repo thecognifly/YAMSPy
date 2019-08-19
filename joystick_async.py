@@ -65,7 +65,7 @@ READ_VOLT_FC_FREQ = 1
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['roll', 'pitch', 'throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['roll','throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
@@ -145,7 +145,6 @@ async def joystick_interface(dev, ext_contr_pipe = None):
 
     print("joystick_interface started...")
 
-    last_throttle = None
     reboot_event = [0,0]
     joystick_lost = False
     failsafe = False
