@@ -90,6 +90,15 @@ class Poss(io.IOBase):
         self.pipe_read = pipe_read
         self.pipe_write = pipe_write
 
+        # @ PIXEL SIZE of Pi camera
+        self.PIXEL_SIZE_M = (16*1.4) * 10e-6 # 1.4um 4x4 binning
+
+        # @ Focal Length of Pi camera
+        self.FOCAL_LENGTH_M = 3.6 * 10e-3 # 3.6mm
+
+        # @ Unit to ground meter 
+        self.flow = self.PIXEL_SIZE_M/self.FOCAL_LENGTH_M
+
         # @ Set the opencv parameter
         self.flag_fi = True # Capture the first  frame
         self.imgPost = self.imgNow = None
@@ -153,7 +162,7 @@ class Poss(io.IOBase):
                 s_now = (np.sum(length_now))/2
                 # area_diff = area_now - area_pre
                 area_diff = np.sqrt(s_now*np.prod(s_now-length_now)) - np.sqrt(s_pre*np.prod(s_pre-length_pre))
-                return (drift_pos, area_diff)
+                return (drift_pos*self.flow, area_diff)
         else:
             return ((None, None), None)
 
