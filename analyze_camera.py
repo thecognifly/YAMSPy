@@ -194,7 +194,7 @@ class Poss(io.IOBase):
                         # Capture feature
                         kq, dq = self.fea_det.detectAndCompute(self.imgNow, None) 
                         kt, dt = self.fea_det.detectAndCompute(img, None)
-                        self.pipe_write.send(self.BF_filter(kt, dt, kq, dq), time.time()-prev_time)
+                        self.pipe_write.send((self.BF_filter(kt, dt, kq, dq), time.time()-prev_time))
                         self.imgNow = img
                     except:
                         pass
