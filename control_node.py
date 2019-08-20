@@ -194,9 +194,6 @@ class control():
                     CMDS['throttle'] += cancel_gravity_value / ((np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180)))
                     value_available = True 
                     prev_altitude_sensor = altitude_corrected
-                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>THR ",next_throttle, init_altitude)
-                    print("\n", error_altitude, velocity)
-
             '''Update the ToF value'''
             if control_tof_pipe_read.poll():
                 if not init_altitude:
@@ -205,9 +202,15 @@ class control():
                 else:
                     # turning the altitdue back to ground, reference as global coordinate
                     altitude_sensor = control_tof_pipe_read.recv()
-                    # Correct the altitude when the drone having an angle: height_reading * cos(roll) * cos(pitch)
-                    altitude_corrected =  self.truncate(altitude_sensor * (np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))) 
-                    tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
+                    # The sensor is not at the center axis of rotation
+                    # The following parts are going to turn the offset bact the origin
+                    # ROLL: (Measure * cos(roll_angle)) - (sensor_offset * sin(sensor_angle - roll_angle)
+                    # PITCH: (Measure - offset) * cos(pitch_angle) 
+                    # combine: (Measure * cos(roll) * cos(pitch)) - (offset * sin(sensor-roll) * cos(pitch))
+                    # CogniFly offset -> z: -40mm, y: +38mm
+                    altitude_corrected = altitude_sensor * (np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
+                    offset = 0.05517 * np.sin(0.81 - (self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
+                    tof_filter.update([(altitude_corrected-offset), ((altitude_corrected-offset)-prev_altitude_sensor)/dt])
                         
             '''Update the XY Filter'''
             # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
@@ -241,11 +244,11 @@ class control():
                 CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
                 CMDS['pitch'] = next_pitch if abs(next_pitch) <= self.ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*self.ABS_MAX_VALUE_PITCH 
                 value_available = True
-                print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-                print("ERROR ROLL :", error_roll, next_roll, KFXY_z[0,0])
-                print("ERROR PITCH:", error_pitch, next_pitch, KFXY_z[1,0])
-                print("ROLL: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
-                print("PITCH ", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
+                # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
+                # print("ERROR ROLL :", error_roll, next_roll, KFXY_z[0,0])
+                # print("ERROR PITCH:", error_pitch, next_pitch, KFXY_z[1,0])
+                # print("ROLL: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
+                # print("PITCH ", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
 
             '''Send out the CMDS values back to the joystick loop'''
             if value_available and (not ext_control_pipe_read.poll()):
