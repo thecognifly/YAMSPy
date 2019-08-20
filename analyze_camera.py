@@ -26,7 +26,7 @@ class Flow(io.IOBase):
 
         # @ Set the calc parameter
         self.max_flow = (((self.frameWidth) / 16) * ((self.frameHeight) / 16) * (64+64)) # 128 is the maximum value of the flow (+- 64)
-        self.flow  = 165 / self.max_flow # 165 is flow scale @ meter
+        self.flow  = 16.5 / self.max_flow # 16.5 is flow scale @ meter
 
         # @ Set the motion array parameter
         self.data = None
