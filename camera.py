@@ -47,18 +47,18 @@ class Camera():
         camera.framerate = self.framerate
         camera.contrast = self.contrast
         # Start the video process
-        with Poss(self.pipe_read_cv, self.pipe_write_cv,frameWidth=self.width,frameHeight=self.height, DEBUG = self.DEBUG) as poss:
-            with Flow(self.pipe_read_of, self.pipe_write_of, frameWidth=self.width,frameHeight=self.height, DEBUG = self.DEBUG) as flow:
-                camera.start_recording(poss, format='bgr', splitter_port = 1)
-                camera.start_recording("/dev/null", format='h264', splitter_port=2, motion_output=flow)
-                try:
-                    while True:
-                        camera.wait_recording(.01)
-                except KeyboardInterrupt:
-                    pass
-                finally:
-                    camera.stop_recording(splitter_port=1)
-                    camera.stop_recording(splitter_port=2)
+        # with Poss(self.pipe_read_cv, self.pipe_write_cv,frameWidth=self.width,frameHeight=self.height, DEBUG = self.DEBUG) as poss:
+        with Flow(self.pipe_read_of, self.pipe_write_of, frameWidth=self.width,frameHeight=self.height, DEBUG = self.DEBUG) as flow:
+                # camera.start_recording(poss, format='bgr', splitter_port = 2)
+            camera.start_recording("/dev/null", format='h264', splitter_port=1, motion_output=flow)
+            try:
+                while True:
+                    camera.wait_recording(.01)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                camera.stop_recording(splitter_port=1)
+                # camera.stop_recording(splitter_port=2)
 
 # The value return in pipe read end
 # from camera import Camera
