@@ -506,8 +506,8 @@ if __name__ == '__main__':
     # opticalflow_process = Process(target=opticalflow_node, args=(control_pipe_out, nice_level))
     camera = Camera((control_optflow_pipe_write, control_optflow_pipe_read),
                     (control_cv_pipe_write, control_cv_pipe_read),
-                    frameWidth=240,
-                    frameHeight=240,
+                    frameWidth=1920,
+                    frameHeight=1080,
                     frameRate=30,
                     DEBUG=False)
     nice_level_cam = 5
