@@ -87,31 +87,6 @@ class control():
         
         return KFXY, KFXY_z, KFXY_u # Filter, Filter_Sensor_varible, Control_input
 
-    def xy_cv_filter_init(self):
-        '''CV XY Filter'''
-        XYcv = KalmanFilter(dim_x = 4, dim_z = 4, dim_u = 1)  # Set up the XY filter
-        XYcv.x = np.array([ [0.], #dx(pitch)
-                            [0.], #dy(roll)
-                            [0.], #vx(pitch)
-                            [0.]])#vy(roll)
-                            
-        XYcv.F = np.diag([1., 1., 1., 1.])
-        XYcv.P *= 1
-        XYcv.B = np.diag([0., 0., 1., 1.])
-        XYcv.H *= 1
-        XYcv.Q *= 0.05
-        XYcv.R *= 0.1
-        XYcv_z = np.array([ [0.], #sum of x # Update value of the XY filter
-                            [0.], #sum of y
-                            [0.], #dx/dt
-                            [0.]]) #dy/dt
-        XYcv_u = np.array([ [0.], # Control input for XY filter
-                            [0.],
-                            [0.],#ax
-                            [0.]])#ay
-        
-        return XYcv, XYcv_z,  XYcv_u
-
     def value_limit(self, output, limit):
         '''Set the value not excite the limited value'''
         if abs(output) >= limit:
@@ -134,7 +109,6 @@ class control():
         # Init the ToF kalman filter
         tof_filter = self.tof_filter_init()
         KFXY, KFXY_z, KFXY_u = self.xy_of_filter_init()
-        XYcv, XYcv_z, XYcv_u = self.xy_cv_filter_init()
 
         ''' PID Init '''
         throttle_pd = PID(self.PZ_GAIN, self.IZ_GAIN, self.DZ_GAIN)    #throttle PID
@@ -156,7 +130,6 @@ class control():
         CMDS = {'throttle': 0,
                 'roll':     0,
                 'pitch':    0}
-        pre_time = time.time()
         prev_time = time.time()
         while True:
             CMDS['throttle'] = 0
@@ -215,12 +188,14 @@ class control():
                 if (not self.TAKEOFF):
                     error_altitude =  init_altitude - altitude # altitude
                     next_throttle = throttle_pd.calc(error_altitude, time = dt, velocity=-velocity) 
+                    # Set throttle by PID control
                     CMDS['throttle'] = self.value_limit(next_throttle, self.ABS_MAX_VALUE_THROTTLE)
-                    CMDS['throttle'] += cancel_gravity_value/(np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180)) # Constant CG
+                    # Add the cancel gravity set point with the angle compensate
+                    CMDS['throttle'] += cancel_gravity_value / ((np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180)))
                     value_available = True 
                     prev_altitude_sensor = altitude_corrected
-                    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>THR ",next_throttle, init_altitude)
-                    # print("\n", error_altitude, velocity)
+                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>THR ",next_throttle, init_altitude)
+                    print("\n", error_altitude, velocity)
 
             '''Update the ToF value'''
             if control_tof_pipe_read.poll():
@@ -234,88 +209,43 @@ class control():
                     altitude_corrected =  self.truncate(altitude_sensor * (np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))) 
                     tof_filter.update([altitude_corrected, (altitude_corrected-prev_altitude_sensor)/dt])
                         
-            # '''Update the XY Filter'''
-            # # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
-            # if (not self.TAKEOFF):
-            #     dt = time.time()-prev_time
-            #     KFXY.F[0,2] = altitude*dt
-            #     KFXY.F[1,3] = altitude*dt
-            #     KFXY.B[2,2] = dt
-            #     KFXY.B[3,3] = dt
-            #     # Another angular speed can be optained by (atitude/dt)
-            #     # linear speed can be optained by angluar_speed*height
-            #     KFXY_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
-            #     KFXY_u[3,0] = self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
-            #     if control_optflow_pipe_read.poll():
-            #         # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
-            #         KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
-            #         if (abs(velocity)>self.OF_VELOCITY_FILTER):
-            #             KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
-                
-            #     KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
-
-            #     '''X-Y control'''
-            #     error_roll  =self.truncate(init_y - KFXY.x[1,0])
-            #     error_pitch =self.truncate(init_x - KFXY.x[0,0])
-            #     velocity_roll = self.truncate(KFXY.x[3,0])
-            #     velocity_pitch = self.truncate(KFXY.x[2,0])
-            #     # velocity_roll =  self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt))
-            #     # velocity_pitch = self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt))
-            #     next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
-            #     next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
-            #     CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
-            #     CMDS['pitch'] = next_pitch if abs(next_pitch) <= self.ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*self.ABS_MAX_VALUE_PITCH 
-            #     value_available = True
-            #     print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-            #     print("ERROR ROLL :", error_roll, next_roll, KFXY_z[0,0])
-            #     print("ERROR PITCH:", error_pitch, next_pitch, KFXY_z[1,0])
-            #     print("ROLL: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
-            #     print("PITCH ", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
-
-            '''XY control with opencv'''
-            # This is just to check the speed... (around 2Hz)
-            if init_altitude:
-                xy_flag = True
+            '''Update the XY Filter'''
+            # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
+            if (not self.TAKEOFF):
                 dt = time.time()-prev_time
-                XYcv.F[0,2] = dt
-                XYcv.F[1,3] = dt
-                XYcv.B[2,2] = dt
-                XYcv.B[3,3] = dt
-                XYcv_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
-                XYcv_u[3,0] = self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
-                if control_cv_pipe_read.poll():
-                    data_recv = control_cv_pipe_read.recv()
-                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", data_recv)
-                    try:
-                        dx = data_recv[0][0][0] * altitude
-                        dy = data_recv[0][0][1] * altitude
-                        XYcv_z[0,0] += dx  #sum of dx
-                        XYcv_z[1,0] += dy #sum of dy
-                        cv_dt = data_recv[1]
-                        XYcv_z[2,0] = dx / cv_dt
-                        XYcv_z[3,0] = dy / cv_dt
-                        XYcv.update(XYcv_z)# To real scale # X-Y reversed
-                        # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", XYcv_z)
-                    except TypeError:
-                        '''Sometime the opencv will return none but the time dont, it just protect the code'''
-                        xy_flag = False
-                        pass
+                KFXY.F[0,2] = altitude*dt
+                KFXY.F[1,3] = altitude*dt
+                KFXY.B[2,2] = dt
+                KFXY.B[3,3] = dt
+                # Another angular speed can be optained by (atitude/dt)
+                # linear speed can be optained by angluar_speed*height
+                KFXY_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
+                KFXY_u[3,0] = self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
+                if control_optflow_pipe_read.poll():
+                    # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
+                    KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
+                    if (abs(velocity)>self.OF_VELOCITY_FILTER):
+                        KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+                
+                KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
 
-                if not self.TAKEOFF and xy_flag:         
-                    XYcv.predict(u=XYcv_u)
-                    error_roll  =self.truncate(init_y - XYcv.x[1,0])
-                    error_pitch =self.truncate(init_x - XYcv.x[0,0])
-                    velocity_roll = self.truncate(XYcv.x[3,0])
-                    velocity_pitch = self.truncate(XYcv.x[2,0])
-                    next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
-                    next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
-                    CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
-                    CMDS['pitch'] = next_pitch if abs(next_pitch) <= self.ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*self.ABS_MAX_VALUE_PITCH 
-                    value_available = True
-                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-                    # print(error_roll, error_pitch)
-                    # print(velocity_roll, velocity_pitch)
-                    # print(CMDS['roll'], CMDS['pitch'])
+                '''X-Y control'''
+                error_roll  =self.truncate(init_y - KFXY.x[1,0])
+                error_pitch =self.truncate(init_x - KFXY.x[0,0])
+                velocity_roll = self.truncate(KFXY.x[3,0])
+                velocity_pitch = self.truncate(KFXY.x[2,0])
+                # velocity_roll =  self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt))
+                # velocity_pitch = self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt))
+                next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
+                next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
+                CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
+                CMDS['pitch'] = next_pitch if abs(next_pitch) <= self.ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*self.ABS_MAX_VALUE_PITCH 
+                value_available = True
+                print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
+                print("ERROR ROLL :", error_roll, next_roll, KFXY_z[0,0])
+                print("ERROR PITCH:", error_pitch, next_pitch, KFXY_z[1,0])
+                print("ROLL: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
+                print("PITCH ", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
 
             '''Send out the CMDS values back to the joystick loop'''
             if value_available and (not ext_control_pipe_read.poll()):
