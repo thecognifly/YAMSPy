@@ -40,6 +40,8 @@ class Flow(io.IOBase):
         self.pipe_read = pipe_read
         self.pipe_write = pipe_write
 
+        if self.DEBUG:
+            self.start = time.time()
     def writable(self):
         '''
         Act like a file-like class
@@ -51,13 +53,13 @@ class Flow(io.IOBase):
         Act like a file-like class
         '''
         # Config the size of the numpy array
-        if self.DEBUG:
-            start = time.time()
         if self.cols is None:
             self.cols = ((self.frameWidth + 15) // 16) + 1
             self.rows = (self.frameHeight + 15) // 16
         # If the pipe is clean, write the data in
         # We do all the calc when pipe is usable, help to save processing power
+        #DEBUG Checking the hold loop will recv the updatest data
+        # if self.pipe_write.poll():
         if not self.pipe_read.poll(): 
             data = (np.frombuffer(b, dtype=self.motion_dtype).reshape((self.rows, self.cols)))
             x_motion = np.sum(data['x'])*self.flow
@@ -65,13 +67,13 @@ class Flow(io.IOBase):
             x_motion = 0 if abs(x_motion) < 0.01 else x_motion # smaller than 1cm, think is noise
             y_motion = 0 if abs(y_motion) < 0.01 else y_motion
             self.pipe_write.send((x_motion, 
-                                  y_motion, 
-                                  time.time()))
-            #DEBUG Checking the hold loop will recv the updatest data
-            self.pipe_write.recv()
-
+                                y_motion, 
+                                time.time()))
+        self.pipe_write.recv()
+            
         if self.DEBUG:
-            print("FLOW - Running at %2.2f Hz"%(1/(time.time()-start)))
+            print("FLOW - Running at %2.2f Hz"%(1/(time.time()-self.start)))
+        self.start = time.time()
         return  len(b)      
 
 class Poss(io.IOBase):

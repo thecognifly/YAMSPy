@@ -107,14 +107,6 @@ class control():
         ''' Truncate the value down to 2 dp as default'''
         return (int(data*(10**dp)))/(10**dp)
 
-    def trigger_pipe(self, *args):
-        ''' Sending something to release the lock of pipe'''
-        of, cv, tof, imu = args
-        of.send('a')
-        # cv.send('a')
-        # tof.send('a')
-        # imu.send('a')
-
     def control_process(self, *args):
         '''This function will called from joystick_async as subprocess'''
         control_optflow_pipe_read, control_cv_pipe_read, control_tof_pipe_read, control_imu_pipe_read, ext_control_pipe_write, ext_control_pipe_read, nice_level = args
@@ -151,9 +143,9 @@ class control():
                 CMDS['throttle'] = 0
                 CMDS['roll']     = 0
                 CMDS['pitch']    = 0
-                '''Let the pipe write something'''
-                self.trigger_pipe(control_optflow_pipe_read, control_cv_pipe_read, control_tof_pipe_read, control_imu_pipe_read)
-
+                # Let the OF Pipe run
+                control_optflow_pipe_read.send('a')
+                control_tof_pipe_read.send('a')
                 '''Read the joystick_node trigger the auto mode or not'''
                 if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
                     postition_hold = ext_control_pipe_write.recv()
@@ -235,7 +227,6 @@ class control():
                 # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
                 if (not self.TAKEOFF):
                     dt = time.time()-prev_time
-                    KFXY.F[0,2] = dt
                     KFXY.F[1,3] = dt
                     KFXY.B[2,2] = dt
                     KFXY.B[3,3] = dt
@@ -270,7 +261,9 @@ class control():
                     
                     print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
                     t = time.time()
-                    print("TIME:{0:2f}  |  OF:{1:.2f}   |   IMU:{2:.2f}    |   TOF:{3:.2f}".format(t, 
+                    #OF 0.08 - 0.14s
+                    #TOF 0.08 - 0.1s
+                    print("TIME:{0:1.2f}  |  OF:{1:.2f}   |   IMU:{2:.2f}    |   TOF:{3:.2f}".format(t, 
                                                                                                 (self.OF_TIME-t), 
                                                                                                 (self.IMU_TIME-t),
                                                                                                 (self.TOF_Time - t)))
@@ -286,6 +279,7 @@ class control():
                 if value_available and (not ext_control_pipe_read.poll()):
                     ext_control_pipe_write.send(CMDS)
                     value_available = False
-                time.sleep(self.PERIOD)   
-            finally:
-                np.save("Data", self.data)     
+                time.sleep(self.PERIOD)
+
+            except Exception:
+                print (Exception)   
