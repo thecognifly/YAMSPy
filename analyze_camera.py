@@ -68,7 +68,7 @@ class Flow(io.IOBase):
                                   y_motion, 
                                   time.time()))
             #DEBUG Checking the hold loop will recv the updatest data
-            self.pipe_read.recv()
+            self.pipe_write.recv()
 
         if self.DEBUG:
             print("FLOW - Running at %2.2f Hz"%(1/(time.time()-start)))
