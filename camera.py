@@ -1,4 +1,5 @@
 import os
+import time
 from multiprocessing import Pool, Process, Pipe
 
 import picamera
@@ -53,7 +54,8 @@ class Camera():
             camera.start_recording("/dev/null", format='h264', splitter_port=1, motion_output=flow)
             try:
                 while True:
-                    camera.wait_recording(.01)
+                    camera.wait_recording()
+                    time.sleep(1)
             except KeyboardInterrupt:
                 pass
             finally:
