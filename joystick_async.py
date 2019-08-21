@@ -430,7 +430,8 @@ async def send_cmds_to_fc(pipes):
                             pipe_write.send(((board.SENSOR_DATA['accelerometer'],
                                              board.SENSOR_DATA['gyroscope'],
                                              board.SENSOR_DATA['kinematics']),
-                                             mean_voltage))
+                                             mean_voltage,
+                                             time.time()))
 
                         frequencies_measurement['send_cmds_to_fc'] = time.time() - prev_time
                         prev_time = time.time()
