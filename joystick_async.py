@@ -511,7 +511,7 @@ if __name__ == '__main__':
                     frameHeight=720,
                     frameRate=30,
                     DEBUG=False)
-    nice_level_cam = 5
+    nice_level_cam = 10
     camera_process = Process(target=camera.run, args=(nice_level_cam,))
     
     # nice_level > nice_level_control_node
