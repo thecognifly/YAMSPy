@@ -64,7 +64,7 @@ class Flow(io.IOBase):
             y_motion = np.sum(data['y'])*self.flow
             x_motion = 0 if abs(x_motion) < 0.01 else x_motion # smaller than 1cm, think is noise
             y_motion = 0 if abs(y_motion) < 0.01 else y_motion
-            self.pipe_write.send((x_motion, y_motion))
+            self.pipe_write.send((x_motion, y_motion, time.time()))
         if self.DEBUG:
             print("FLOW - Running at %2.2f Hz"%(1/(time.time()-start)))
         return  len(b)      
