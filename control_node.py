@@ -133,6 +133,9 @@ class control():
         postition_hold = False
         init_altitude = 0
 
+        '''imu init'''
+        init_imu = None
+
         '''CMDS init'''
         CMDS = {'throttle': 0,
                 'roll':     0,
@@ -155,6 +158,12 @@ class control():
                 '''Update the IMU value'''
                 if control_imu_pipe_read.poll():
                     self.imu, battery_voltage, self.IMU_TIME = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
+                    if init_imu is None:
+                        init_imu = np.asarray(self.imu)
+                    else:
+                        self.imu = np.asarray(self.imu)
+                        self.imu = self.imu - init_imu
+                        self.imu = self.imu.tolist()
                     if self.TAKEOFF:
                         # Tested voltage throttle relationship
                         TAKEOFF_THRUST = int(1015-60*(battery_voltage))
@@ -173,7 +182,7 @@ class control():
                 '''Vertical Movement Control'''
                 if init_altitude:
                     # Update the ToF Filter
-                    dt = time.time()-prev_time
+                    dt = time.time()-self.TOF_Time
                     tof_filter.F[0,1] = dt
                     tof_filter.B[0] = 0.5*(dt**2)
                     tof_filter.B[1] = dt
@@ -225,22 +234,22 @@ class control():
                             
                 '''Update the XY Filter'''
                 # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
-                if (not self.TAKEOFF):
-                    dt = time.time()-prev_time
-                    KFXY.F[1,3] = dt
-                    KFXY.B[2,2] = dt
-                    KFXY.B[3,3] = dt
+                if (not self.TAKEOFF) and init_imu:
+                    dt_OF = time.time()-self.OF_TIME
+                    dt_IMU = time.time()-self.IMU_TIME
+                    KFXY.F[0,2] = dt_OF
+                    KFXY.F[1,3] = dt_OF
+                    KFXY.B[2,2] = dt_IMU
+                    KFXY.B[3,3] = dt_IMU
                     # Another angular speed can be optained by (atitude/dt)
                     # linear speed can be optained by angluar_speed*height
-                    KFXY_u[2,0] = 0 #self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
-                    KFXY_u[3,0] = 0 #self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
+                    KFXY_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
+                    KFXY_u[3,0] = self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
                     if control_optflow_pipe_read.poll():
                         # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
                         KFXY_z[0,0], KFXY_z[1,0], self.OF_TIME = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
                         if (abs(velocity)>self.OF_VELOCITY_FILTER):
                             KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
-                            print("----------------------------------------------")
-                            print(self.truncate(KFXY.x[3,0]),self.truncate(KFXY.x[2,0]))
                     
                     # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>/>\n", KFXY_z*-altitude)
                     
@@ -263,16 +272,16 @@ class control():
                     t = time.time()
                     #OF 0.08 - 0.14s
                     #TOF 0.08 - 0.1s
+                                                                 
+                    print("THROTTLE :", error_altitude, altitude, CMDS['throttle'])
+                    print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, KFXY_z[1,0]*(-altitude)))
+                    print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, KFXY_z[0,0]*(-altitude)))
+                    print("ROLL velocity: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
+                    print("PITCH velocity", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
                     print("TIME:{0:1.2f}  |  OF:{1:.2f}   |   IMU:{2:.2f}    |   TOF:{3:.2f}".format(t, 
                                                                                                 (self.OF_TIME-t), 
                                                                                                 (self.IMU_TIME-t),
                                                                                                 (self.TOF_Time - t)))
-                                                                 
-                    # print("THROTTLE :", error_altitude, altitude, CMDS['throttle'])
-                    # print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, KFXY_z[1,0]*(-altitude)))
-                    # print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, KFXY_z[0,0]*(-altitude)))
-                    # print("ROLL velocity: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
-                    # print("PITCH velocity", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
 
                     self.data.append((KFXY_z[1,0], KFXY_z[0,0], -velocity_roll, -velocity_pitch))
                 '''Send out the CMDS values back to the joystick loop'''
@@ -281,5 +290,5 @@ class control():
                     value_available = False
                 time.sleep(self.PERIOD)
 
-            except Exception:
-                print (Exception)   
+            except Exception as e:
+                print (e)   
