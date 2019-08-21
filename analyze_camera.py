@@ -67,8 +67,9 @@ class Flow(io.IOBase):
             self.pipe_write.send((x_motion, 
                                   y_motion, 
                                   time.time()))
-            #DEBUG Checking the hold loop will recev the updatest data
-            self.pipe_read.recev()
+            #DEBUG Checking the hold loop will recv the updatest data
+            self.pipe_read.recv()
+
         if self.DEBUG:
             print("FLOW - Running at %2.2f Hz"%(1/(time.time()-start)))
         return  len(b)      
