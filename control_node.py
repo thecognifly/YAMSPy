@@ -29,6 +29,11 @@ class control():
         '''init takeoff'''
         self.TAKEOFF = True
 
+        '''Time'''
+        self.IMU_TIME = 0 # IMU Timestamp
+        self.OF_TIME  = 0 # Optical Flow Timestamp
+        self.TOF_Time = 0 # Time of Flight Timestamp
+
         '''PID'''
         #Pitch PD G0
         self.PX_GAIN = 20
@@ -102,6 +107,14 @@ class control():
         ''' Truncate the value down to 2 dp as default'''
         return (int(data*(10**dp)))/(10**dp)
 
+    def trigger_pipe(self, *args):
+        ''' Sending something to release the lock of pipe'''
+        of, cv, tof, imu = args
+        of.send('a')
+        # cv.send('a')
+        # tof.send('a')
+        # imu.send('a')
+
     def control_process(self, *args):
         '''This function will called from joystick_async as subprocess'''
         control_optflow_pipe_read, control_cv_pipe_read, control_tof_pipe_read, control_imu_pipe_read, ext_control_pipe_write, ext_control_pipe_read, nice_level = args
@@ -138,6 +151,8 @@ class control():
                 CMDS['throttle'] = 0
                 CMDS['roll']     = 0
                 CMDS['pitch']    = 0
+                '''Let the pipe write something'''
+                self.trigger_pipe(control_optflow_pipe_read, control_cv_pipe_read, control_tof_pipe_read, control_imu_pipe_read)
 
                 '''Read the joystick_node trigger the auto mode or not'''
                 if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
@@ -147,7 +162,7 @@ class control():
                 
                 '''Update the IMU value'''
                 if control_imu_pipe_read.poll():
-                    self.imu, battery_voltage = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
+                    self.imu, battery_voltage, self.IMU_TIME = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
                     if self.TAKEOFF:
                         # Tested voltage throttle relationship
                         TAKEOFF_THRUST = int(1015-60*(battery_voltage))
@@ -201,11 +216,11 @@ class control():
                 '''Update the ToF value'''
                 if control_tof_pipe_read.poll():
                     if not init_altitude:
-                        altitude_sensor = control_tof_pipe_read.recv() # Flushing the old value 
+                        altitude_sensor, self.TOF_Time = control_tof_pipe_read.recv() # Flushing the old value 
                         # altitude_sensor = control_tof_pipe_read.recv() # Flushing the old value 
                     else:
                         # turning the altitdue back to ground, reference as global coordinate
-                        altitude_sensor = control_tof_pipe_read.recv()
+                        altitude_sensor, self.TOF_Time = control_tof_pipe_read.recv()
                         # The sensor is not at the center axis of rotation
                         # The following parts are going to turn the offset bact the origin
                         # ROLL: (Measure * cos(roll_angle)) - (sensor_offset * sin(sensor_angle - roll_angle)
@@ -230,7 +245,7 @@ class control():
                     KFXY_u[3,0] = 0 #self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
                     if control_optflow_pipe_read.poll():
                         # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
-                        KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
+                        KFXY_z[0,0], KFXY_z[1,0], self.OF_TIME = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
                         if (abs(velocity)>self.OF_VELOCITY_FILTER):
                             KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
                             print("----------------------------------------------")
@@ -254,11 +269,17 @@ class control():
                     value_available = True
                     
                     print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-                    print("THROTTLE :", error_altitude, altitude, CMDS['throttle'])
-                    print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, KFXY_z[1,0]*(-altitude)))
-                    print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, KFXY_z[0,0]*(-altitude)))
-                    print("ROLL velocity: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
-                    print("PITCH velocity", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
+                    t = time.time()
+                    print("TIME:{0:2f}  |  OF:{1:.2f}   |   IMU:{2:.2f}    |   TOF:{3:.2f}".format(t, 
+                                                                                                (self.OF_TIME-t), 
+                                                                                                (self.IMU_TIME-t),
+                                                                                                (self.TOF_Time - t)))
+                                                                 
+                    # print("THROTTLE :", error_altitude, altitude, CMDS['throttle'])
+                    # print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, KFXY_z[1,0]*(-altitude)))
+                    # print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, KFXY_z[0,0]*(-altitude)))
+                    # print("ROLL velocity: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
+                    # print("PITCH velocity", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
 
                     self.data.append((KFXY_z[1,0], KFXY_z[0,0], -velocity_roll, -velocity_pitch))
                 '''Send out the CMDS values back to the joystick loop'''
