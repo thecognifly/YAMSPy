@@ -142,7 +142,6 @@ class control():
                 'pitch':    0}
         while True:
             try:
-                prev_time = time.time()
                 CMDS['throttle'] = 0
                 CMDS['roll']     = 0
                 CMDS['pitch']    = 0
@@ -182,7 +181,7 @@ class control():
                 '''Vertical Movement Control'''
                 if init_altitude:
                     # Update the ToF Filter
-                    dt = time.time()-self.TOF_Time
+                    dt = prev_time-self.TOF_Time
                     tof_filter.F[0,1] = dt
                     tof_filter.B[0] = 0.5*(dt**2)
                     tof_filter.B[1] = dt
@@ -235,8 +234,8 @@ class control():
                 '''Update the XY Filter'''
                 # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
                 if (not self.TAKEOFF) and init_imu:
-                    dt_OF = time.time()-self.OF_TIME
-                    dt_IMU = time.time()-self.IMU_TIME
+                    dt_OF = prev_time-self.OF_TIME
+                    dt_IMU = prev_time-self.IMU_TIME
                     KFXY.F[0,2] = dt_OF
                     KFXY.F[1,3] = dt_OF
                     KFXY.B[2,2] = dt_IMU
@@ -289,6 +288,7 @@ class control():
                     ext_control_pipe_write.send(CMDS)
                     value_available = False
                 time.sleep(self.PERIOD)
+                prev_time = time.time()
 
             except Exception as e:
                 print (e)   
