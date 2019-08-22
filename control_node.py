@@ -43,7 +43,7 @@ class control():
         #Roll PD Gain
         self.PY_GAIN = 100
         self.IY_GAIN = 0.005
-        self.DY_GAIN = 10
+        self.DY_GAIN = 22
         #Altitude PID Gain
         # For 2S battery
         self.PZ_GAIN = 60
