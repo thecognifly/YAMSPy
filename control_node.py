@@ -13,10 +13,9 @@ class control():
         ''' Define all the parameter'''
         '''Basic parameter'''''
         self.PERIOD = 1/100               # Sleeping time
-        self.ABS_MAX_VALUE_ROLL = 100      # PID Roll limit
+        self.ABS_MAX_VALUE_ROLL = 150      # PID Roll limit
         self.ABS_MAX_VALUE_PITCH = 150     # PID Pitch limit
-        self.ABS_MAX_VALUE_THROTTLE = 150 # PID Throttle limit
-        self.OF_VELOCITY_FILTER = 0.8     # Ignore the optical flow when veritcal speed higher than 0.6m/s
+        self.ABS_MAX_VALUE_THROTTLE = 200 # PID Throttle limit
 
         '''Takeoff parameter'''
         self.TAKEOFF_ALTITUDE = 1#m     # Take off altitude
@@ -139,8 +138,9 @@ class control():
         prev_time = time.time()
         while True:
             try:
-                CMDS['throttle'] = -30 #Its moving forward by unbalance
+                CMDS['throttle'] = 0 
                 CMDS['roll']     = 0
+                # The betaflight config trim the pitch -10 for unbalance of the drone
                 CMDS['pitch']    = 0
                 # Let the OF Pipe run
                 control_optflow_pipe_read.send('a')
@@ -239,7 +239,7 @@ class control():
                     # For init reading will very large, but normal case would not larger than 1s
                     dt_OF = prev_time-self.OF_TIME
                     dt_IMU = prev_time-self.IMU_TIME
-                    KFXY.R[0,0] = (0.01+(velocity/100))
+                    KFXY.R[0,0] = (0.01+(velocity/100)) # Increase the noise for the filter when up and down 
                     KFXY.R[1,1] = (0.01+(velocity/100))
                     KFXY.F[0,2] = dt_OF if abs(dt_OF<3) else 0
                     KFXY.F[1,3] = dt_OF if abs(dt_OF<3) else 0
@@ -259,8 +259,9 @@ class control():
                     KFXY.predict(u=0)#KFXY_u) # [dx, dy, vx, vy]
 
                     '''X-Y control'''
-                    error_roll  =self.truncate(init_y - KFXY.x[1,0])/8
-                    error_pitch =self.truncate(init_x - KFXY.x[0,0])/9
+                    #The calcuated value seem scale up, so having a factor
+                    error_roll  =self.truncate((init_y - KFXY.x[1,0])*0.8)
+                    error_pitch =self.truncate((init_x - KFXY.x[0,0])*0.9)
                     velocity_roll = self.truncate(KFXY.x[3,0])
                     velocity_pitch = self.truncate(KFXY.x[2,0])
                     next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
@@ -269,10 +270,7 @@ class control():
                     CMDS['pitch'] = next_pitch if abs(next_pitch) <= self.ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*self.ABS_MAX_VALUE_PITCH 
                     value_available = True
                     
-                    print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-                    #OF 0.08 - 0.14s
-                    #TOF 0.08 - 0.1s
-                                                                 
+                    print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")                                
                     print("THROTTLE :{2:.2f}    | ALT:{1:.2f}   |   ERR:{0:.2f}     |   Vec:{3:.2f}".format(error_altitude, altitude, next_throttle, velocity))
                     print("dt_OF:{:.2f} |   dt_IMU:{:.2f}".format(dt_OF,dt_IMU))
                     print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, KFXY_z[1,0]*(-altitude)))
