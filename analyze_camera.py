@@ -26,10 +26,10 @@ class Flow(io.IOBase):
 
         # @ Set the calc parameter
         self.max_flow = (((self.frameWidth) / 16) * ((self.frameHeight) / 16) * (64+64)) # 128 is the maximum value of the flow (+- 64)
-        self.flow  = 16.5 / self.max_flow # 16.5 is flow scale @ meter
+        self.flow  = 10 / self.max_flow # 10 is flow scale @ meter
 
         # @ Set the motion array parameter
-        self.data = None
+        self.displacement = np.array([0., 0.])
         self.motion_dtype = np.dtype([
             (str('x'),   np.int8),
             (str('y'),   np.int8),
@@ -40,8 +40,8 @@ class Flow(io.IOBase):
         self.pipe_read = pipe_read
         self.pipe_write = pipe_write
 
-        if self.DEBUG:
-            self.start = time.time()
+        
+        self.start = time.time()
     def writable(self):
         '''
         Act like a file-like class
@@ -52,29 +52,38 @@ class Flow(io.IOBase):
         '''
         Act like a file-like class
         '''
-        # Config the size of the numpy array
-        if self.cols is None:
-            self.cols = ((self.frameWidth + 15) // 16) + 1
-            self.rows = (self.frameHeight + 15) // 16
-        # If the pipe is clean, write the data in
-        # We do all the calc when pipe is usable, help to save processing power
-        #DEBUG Checking the hold loop will recv the updatest data
-        # if self.pipe_write.poll():
-        if not self.pipe_read.poll(): 
+        try:
+            # Config the size of the numpy array
+            if self.cols is None:
+                self.cols = ((self.frameWidth + 15) // 16) + 1
+                self.rows = (self.frameHeight + 15) // 16
+            # If the pipe is clean, write the data in
+            # We do all the calc when pipe is usable, help to save processing power
+            #DEBUG Checking the hold loop will recv the updatest data
+            # if self.pipe_write.poll():
             data = (np.frombuffer(b, dtype=self.motion_dtype).reshape((self.rows, self.cols)))
             x_motion = np.sum(data['x'])*self.flow
             y_motion = np.sum(data['y'])*self.flow
             x_motion = 0 if abs(x_motion) < 0.01 else x_motion # smaller than 1cm, think is noise
             y_motion = 0 if abs(y_motion) < 0.01 else y_motion
-            self.pipe_write.send((x_motion, 
-                                y_motion, 
-                                time.time()))
-        self.pipe_write.recv()
-            
-        if self.DEBUG:
-            print("FLOW - Running at %2.2f Hz"%(1/(time.time()-self.start)))
-        self.start = time.time()
-        return  len(b)      
+            self.displacement[0] += (x_motion*(time.time()-self.start)) # velocity to displacement
+            self.displacement[1] += (y_motion*(time.time()-self.start))
+            if not self.pipe_read.poll(): 
+                self.pipe_write.send((x_motion, 
+                                    y_motion, 
+                                    self.displacement,
+                                    time.time()))
+                self.displacement *= 0 # Reset the displacement
+            self.pipe_write.recv()
+                
+            if self.DEBUG:
+                print("FLOW - Running at %2.2f Hz"%(1/(time.time()-self.start)))
+            self.start = time.time()
+        
+        except Exception as e:
+            print("Analyze Camera error: %s"%e)
+        finally:
+            return  len(b)      
 
 class Poss(io.IOBase):
     '''
