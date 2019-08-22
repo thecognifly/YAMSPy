@@ -52,8 +52,6 @@ class control():
         '''IMU value init''' 
         self.imu = [[0,0,0],[0,0,0],[0,0,0]]
 
-        self.data = []
-
     def tof_filter_init(self):
         '''ToF Filter'''
         dt = 0.01                                                    # Just random assumation
@@ -82,8 +80,8 @@ class control():
         KFXY.P = np.diag([.9, .9, 1., 1.])
         KFXY.B = np.diag([1., 1., 1., 1.]) 
         KFXY.H = np.array([[0, 0, 1., 0], 
-                            [0, 0, 0, 1.]]) 
-        KFXY.Q *= 10**2
+                        [0, 0, 0, 1.]]) 
+        KFXY.Q *= 0.1**2
         KFXY.R *= 0.01**2
         KFXY_z = np.array([ [0.], # Update value of the XY filter
                             [0.]],dtype=float)
@@ -133,13 +131,11 @@ class control():
         postition_hold = False
         init_altitude = 0
 
-        '''imu init'''
-        init_imu = None
-
         '''CMDS init'''
         CMDS = {'throttle': 0,
                 'roll':     0,
                 'pitch':    0}
+        prev_time = time.time()
         while True:
             try:
                 CMDS['throttle'] = 0
@@ -157,12 +153,8 @@ class control():
                 '''Update the IMU value'''
                 if control_imu_pipe_read.poll():
                     self.imu, battery_voltage, self.IMU_TIME = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
-                    if init_imu is None:
-                        init_imu = np.asarray(self.imu)
-                    else:
-                        self.imu = np.asarray(self.imu)
-                        self.imu = self.imu - init_imu
-                        self.imu = self.imu.tolist()
+                    #DEBUG USE
+                    imut=time.time()
                     if self.TAKEOFF:
                         # Tested voltage throttle relationship
                         TAKEOFF_THRUST = int(1015-60*(battery_voltage))
@@ -182,8 +174,9 @@ class control():
                 if init_altitude:
                     # Update the ToF Filter
                     dt = prev_time-self.TOF_Time
-                    tof_filter.F[0,1] = dt
-                    tof_filter.B[0] = 0.5*(dt**2)
+                    # For init reading will very large, but normal case would not larger than 1s
+                    tof_filter.F[0,1] = dt if abs(dt<3) else 0
+                    tof_filter.B[0] = 0.5*(dt**2) if abs(dt<3) else 0
                     tof_filter.B[1] = dt
                     tof_filter.predict(u = 0) #Just test for non -9.81*(0.99-imu[0][2])
                     # Capture the Predicted value
@@ -221,6 +214,8 @@ class control():
                     else:
                         # turning the altitdue back to ground, reference as global coordinate
                         altitude_sensor, self.TOF_Time = control_tof_pipe_read.recv()
+                        #DEBUG USE
+                        toft=time.time()
                         # The sensor is not at the center axis of rotation
                         # The following parts are going to turn the offset bact the origin
                         # ROLL: (Measure * cos(roll_angle)) - (sensor_offset * sin(sensor_angle - roll_angle)
@@ -233,13 +228,14 @@ class control():
                             
                 '''Update the XY Filter'''
                 # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
-                if (not self.TAKEOFF) and init_imu:
+                if (not self.TAKEOFF):
+                    # For init reading will very large, but normal case would not larger than 1s
                     dt_OF = prev_time-self.OF_TIME
                     dt_IMU = prev_time-self.IMU_TIME
-                    KFXY.F[0,2] = dt_OF
-                    KFXY.F[1,3] = dt_OF
-                    KFXY.B[2,2] = dt_IMU
-                    KFXY.B[3,3] = dt_IMU
+                    KFXY.F[0,2] = dt_OF if abs(dt_OF<3) else 0
+                    KFXY.F[1,3] = dt_OF if abs(dt_OF<3) else 0
+                    KFXY.B[2,2] = dt_IMU if abs(dt_IMU<3) else 0
+                    KFXY.B[3,3] = dt_IMU if abs(dt_IMU<3) else 0
                     # Another angular speed can be optained by (atitude/dt)
                     # linear speed can be optained by angluar_speed*height
                     KFXY_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
@@ -247,20 +243,17 @@ class control():
                     if control_optflow_pipe_read.poll():
                         # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
                         KFXY_z[0,0], KFXY_z[1,0], self.OF_TIME = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
-                        if (abs(velocity)>self.OF_VELOCITY_FILTER):
-                            KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+                        #DEBUG USE
+                        oft=time.time()
+                        KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
                     
-                    # print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>/>\n", KFXY_z*-altitude)
-                    
-                    KFXY.predict(u=KFXY_u) # [dx, dy, vx, vy]
+                    KFXY.predict(u=0)#KFXY_u) # [dx, dy, vx, vy]
 
                     '''X-Y control'''
                     error_roll  =self.truncate(init_y - KFXY.x[1,0])
                     error_pitch =self.truncate(init_x - KFXY.x[0,0])
                     velocity_roll = self.truncate(KFXY.x[3,0])
                     velocity_pitch = self.truncate(KFXY.x[2,0])
-                    # velocity_roll =  self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt))
-                    # velocity_pitch = self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt))
                     next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
                     next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
                     CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
@@ -268,27 +261,25 @@ class control():
                     value_available = True
                     
                     print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-                    t = time.time()
                     #OF 0.08 - 0.14s
                     #TOF 0.08 - 0.1s
                                                                  
-                    print("THROTTLE :", error_altitude, altitude, CMDS['throttle'])
+                    print("THROTTLE :{2:.2f}    | ALT:{1:.2f}".format(error_altitude, altitude, CMDS['throttle']))
+                    print("dt_OF:{:.2f} |   dt_IMU:{:.2f}".format(dt_OF,dt_IMU))
                     print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, KFXY_z[1,0]*(-altitude)))
                     print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, KFXY_z[0,0]*(-altitude)))
                     print("ROLL velocity: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
                     print("PITCH velocity", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
-                    print("TIME:{0:1.2f}  |  OF:{1:.2f}   |   IMU:{2:.2f}    |   TOF:{3:.2f}".format(t, 
-                                                                                                (self.OF_TIME-t), 
-                                                                                                (self.IMU_TIME-t),
-                                                                                                (self.TOF_Time - t)))
-
-                    self.data.append((KFXY_z[1,0], KFXY_z[0,0], -velocity_roll, -velocity_pitch))
+                    print("TIME:{0:1.2f}  |  OF:{1:.2f}   |   IMU:{2:.2f}    |   TOF:{3:.2f}".format(time.time(), 
+                                                                                                (self.OF_TIME-oft), 
+                                                                                                (self.IMU_TIME-imut),
+                                                                                                (self.TOF_Time -toft)))
                 '''Send out the CMDS values back to the joystick loop'''
                 if value_available and (not ext_control_pipe_read.poll()):
                     ext_control_pipe_write.send(CMDS)
                     value_available = False
                 time.sleep(self.PERIOD)
-                prev_time = time.time()
+                prev_time = time.time()  
 
             except Exception as e:
-                print (e)   
+                print (e)
