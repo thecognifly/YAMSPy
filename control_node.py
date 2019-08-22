@@ -39,7 +39,7 @@ class control():
         #Pitch PD G0
         self.PX_GAIN = 100
         self.IX_GAIN = 0.005
-        self.DX_GAIN = 18
+        self.DX_GAIN = 22
         #Roll PD Gain
         self.PY_GAIN = 100
         self.IY_GAIN = 0.005
