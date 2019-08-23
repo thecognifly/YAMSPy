@@ -19,6 +19,11 @@ class Flow(io.IOBase):
         # @ For Debug use
         self.DEBUG = DEBUG
 
+        # @ Alpha Filter parameter
+        self.a = 0.5
+        self.pre_x = 0
+        self.pre_y = 0
+
         # @ Set the video frame parameter
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
@@ -66,6 +71,10 @@ class Flow(io.IOBase):
             y_motion = np.sum(data['y'])*self.flow
             x_motion = 0 if abs(x_motion) < 0.01 else x_motion # smaller than 1cm, think is noise
             y_motion = 0 if abs(y_motion) < 0.01 else y_motion
+            x_motion += self.a*(x_motion - self.pre_x)
+            y_motion += self.a*(y_motion - self.pre_y)
+            self.pre_x = x_motion
+            self.pre_y = y_motion
             self.displacement[0] += (x_motion*(time.time()-self.start)) # velocity to displacement
             self.displacement[1] += (y_motion*(time.time()-self.start))
             if not self.pipe_read.poll(): 
