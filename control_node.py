@@ -14,11 +14,11 @@ class control():
         '''Basic parameter'''''
         self.PERIOD = 1/100               # Sleeping time
         self.ABS_MAX_VALUE_ROLL = 50      # PID Roll limit
-        self.ABS_MAX_VALUE_PITCH = 100     # PID Pitch limit
+        self.ABS_MAX_VALUE_PITCH = 50     # PID Pitch limit
         self.ABS_MAX_VALUE_THROTTLE = 200 # PID Throttle limit
 
         '''Takeoff parameter'''
-        self.TAKEOFF_ALTITUDE = 1.3#m     # Take off altitude
+        self.TAKEOFF_ALTITUDE = 1#m     # Take off altitude
         self.TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
         self.TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
         for t in range(len(self.TAKEOFF_LIST)):
@@ -35,14 +35,14 @@ class control():
         self.TOF_Time = 0 # Time of Flight Timestamp
 
         '''PID'''
-        #Pitch PD G0
-        self.PX_GAIN = 8
+        #Pitch PID G0
+        self.PX_GAIN = 15
         self.IX_GAIN = 0.01
-        self.DX_GAIN = 9
-        #Roll PD Gain
-        self.PY_GAIN = 9
-        self.IY_GAIN = 0.02
-        self.DY_GAIN = 9
+        self.DX_GAIN = 14
+        #Roll PID Gain
+        self.PY_GAIN = 15
+        self.IY_GAIN = 0.01
+        self.DY_GAIN = 14
         #Altitude PID Gain
         # For 2S battery
         self.PZ_GAIN = 60
@@ -264,10 +264,12 @@ class control():
                     '''X-Y control'''
                     # error_roll  =self.truncate((init_y - KFXY.x[1,0]))
                     # error_pitch =self.truncate((init_x - KFXY.x[0,0]))
-                    error_roll  =self.truncate((OF_DIS[1]))
-                    error_pitch =self.truncate((OF_DIS[0]))
-                    velocity_roll = self.truncate(KFXY.x[3,0])
-                    velocity_pitch = self.truncate(KFXY.x[2,0])
+                    error_roll  = self.truncate((OF_DIS[1]))
+                    error_pitch = self.truncate((OF_DIS[0]))
+                    velocity_roll = self.truncate(KFXY_z[1,0]*(-altitude))
+                    velocity_pitch = self.truncate(KFXY_z[0,0]*(-altitude))
+                    # velocity_roll = self.truncate(KFXY.x[3,0])
+                    # velocity_pitch = self.truncate(KFXY.x[2,0])
                     next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
                     next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
                     CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
@@ -278,10 +280,10 @@ class control():
                     print ("OF Distance: ",OF_DIS)  
                     print("THROTTLE :{2:.2f}    | ALT:{1:.2f}   |   ERR:{0:.2f}     |   Vec:{3:.2f}".format(error_altitude, altitude, next_throttle, velocity))
                     print("dt_OF:{:.2f} |   dt_IMU:{:.2f}".format(dt_OF,dt_IMU))
-                    print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, KFXY_z[1,0]*(-altitude)))
-                    print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, KFXY_z[0,0]*(-altitude)))
-                    print("ROLL velocity: ", -velocity_roll, KFXY_u[3,0], self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
-                    print("PITCH velocity", -velocity_pitch, KFXY_u[2,0], self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
+                    print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, 0))
+                    print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, 0))
+                    print("ROLL velocity: ", -KFXY.x[3,0], KFXY_z[1,0]*(-altitude), self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
+                    print("PITCH velocity", -KFXY.x[2,0], KFXY_z[0,0]*(-altitude), self.truncate((self.imu[2][1]*np.pi*1/180*altitude/dt)))
                     print("TIME:{0:1.2f}  |  OF:{1:.2f}   |   IMU:{2:.2f}    |   TOF:{3:.2f}".format(time.time(), 
                                                                                                 (self.OF_TIME-oft), 
                                                                                                 (self.IMU_TIME-imut),
