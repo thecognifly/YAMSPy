@@ -65,7 +65,7 @@ READ_VOLT_FC_FREQ = 1
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['pitch','roll','throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = ['roll','pitch','throttle'] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
@@ -98,6 +98,8 @@ board = None
 mean_voltage = -1
 
 min_voltage = -1
+
+controller_battery = -1
 
 frequencies_keys = ['send_cmds_to_fc', 
                     'joystick_interface', 
@@ -334,7 +336,7 @@ async def print_values():
 async def read_voltage_from_fc(dev):
     print("read_voltage_from_fc started...")
 
-    global mean_voltage, min_voltage
+    global mean_voltage, min_voltage, controller_battery
 
     command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
                     'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
@@ -366,6 +368,9 @@ async def read_voltage_from_fc(dev):
         #     voltage = board.ANALOG['voltage']
         #     dataReady = False
 
+        with open("/sys/class/power_supply/sony_controller_battery_90:89:5f:3f:d7:a6/capacity", 'r') as controller:
+            controller_battery = int(controller.read())
+
         board.fast_read_analog()
         voltage = board.ANALOG['voltage']
 
@@ -392,6 +397,7 @@ async def send_cmds_to_fc(pipes):
     global shutdown
     global board
     global mean_voltage
+    global controller_battery
     print("send_cmds_to_fc started...")
 
     pipe_write, pipe_read = pipes 
@@ -412,7 +418,11 @@ async def send_cmds_to_fc(pipes):
                             shutdown = True
                             print('REBOOTING...')
                             break
-                        
+                        if controller_battery < 20:
+                            print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>PS4 Controller capacity too low !")
+                            # shutdown = True
+                            # break
+
                         CMDS_RC = [CMDS[ki] for ki in CMDS_ORDER]
 
                         # if board.send_RAW_RC(CMDS_RC):
