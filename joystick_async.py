@@ -307,7 +307,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
         except:
             print("Something else broke joystick_interface...")
             joystick_lost = True
-            break            
+            break
 
         frequencies_measurement['joystick_interface'] = time.time() - prev_time
         prev_time = time.time()
@@ -315,6 +315,11 @@ async def joystick_interface(dev, ext_contr_pipe = None):
 
     print("joystick_interface closing...")
     if not joystick_lost:
+        fc_reboot = True
+        CMDS['roll'] = CMDS_init['roll']
+        CMDS['pitch'] = CMDS_init['pitch']
+        CMDS['throttle'] = CMDS_init['throttle']
+        CMDS['yaw'] = CMDS_init['yaw']
         dev.write(ecodes.EV_FF, effect_id, 5)
 
 
