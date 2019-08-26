@@ -318,7 +318,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
         await asyncio.sleep(1/JOYSTICK_FREQ)
 
     print("joystick_interface closing...")
-    if not joystick_lost:
+    if joystick_lost:
         fc_reboot = True
         CMDS['roll'] = CMDS_init['roll']
         CMDS['pitch'] = CMDS_init['pitch']
@@ -536,7 +536,7 @@ if __name__ == '__main__':
                     frameHeight=720,
                     frameRate=30,
                     DEBUG=False)
-    nice_level_cam = 10
+    nice_level_cam = 10 
     camera_process = Process(target=camera.run, args=(nice_level_cam,))
     
     # nice_level > nice_level_control_node
