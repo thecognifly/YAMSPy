@@ -228,11 +228,13 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                             CMDS['aux1'] = 1000 # R1 - DISARM
                             autonomous = False
                             print('DISarming...')
+                            print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>RUN TIME: ", (time.time() - start))
                             dev.write(ecodes.EV_FF, effect_id, 2)
                         if event.code == 310:
                             if CMDS['throttle']<=1000:
                                 CMDS['aux1'] = 1800 # L1 - ARM
                                 print('ARMing...')
+                                start = time.time()
                                 dev.write(ecodes.EV_FF, effect_id, 1)
                             else:
                                 dev.write(ecodes.EV_FF, effect_id, 5)
