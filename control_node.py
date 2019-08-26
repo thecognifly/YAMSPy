@@ -34,6 +34,10 @@ class control():
         self.OF_TIME  = 0 # Optical Flow Timestamp
         self.TOF_Time = 0 # Time of Flight Timestamp
 
+        '''Data Record'''
+        self.DATA = True
+        self.data = []
+
         '''PID'''
         #Pitch PID G0
         self.PX_GAIN = 15
@@ -264,6 +268,13 @@ class control():
 
                     OF_DIS += of_dis*altitude
                     '''X-Y control'''
+                    '''
+                                            x (Pitch)
+                                            ^
+                                            |
+                                            |
+                                            o - - - - - > y (Roll)
+                    '''
                     # error_roll  =self.truncate((init_y - KFXY.x[1,0]))
                     # error_pitch =self.truncate((init_x - KFXY.x[0,0]))
                     error_roll  = self.truncate((OF_DIS[1]))
@@ -295,6 +306,13 @@ class control():
                 if not self.TAKEOFF and self.LANDING:
                     print ("LANDING")
                     CMDS['throttle'] = cancel_gravity_value + (15/(altitude+0.5))
+
+                '''Capture Data'''
+                if init_altitude and self.DATA:
+                    self.data.append((CMDS, altitude, error_altitude, velocity,
+                                      error_roll, velocity_roll,
+                                      error_pitch, velocity_pitch))
+
                 
                 '''Send out the CMDS values back to the joystick loop'''
                 if value_available and (not ext_control_pipe_read.poll()):
@@ -305,3 +323,6 @@ class control():
 
             except Exception as e:
                 print("Control Node error: %s"%e)
+            
+            finally:
+                np.save("data", self.data)
