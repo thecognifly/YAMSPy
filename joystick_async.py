@@ -24,6 +24,10 @@ Disclaimer (adapted from Wikipedia):
 None of the authors, contributors, supervisors, administrators, employers, friends, family, vandals, or anyone else 
 connected (or not) with this project, in any way whatsoever, can be made responsible for your use of the information (code) 
 contained or linked from here.
+
+
+TODO:
+- Add a heartbeat to the joystick_interface task so the send_cmds_to_fc could always know if joystick_interface got locked somehow
 """
 
 import asyncio
@@ -167,11 +171,13 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                         # The received commands will always actuate around the center positions
                         CMDS['roll'] = CMDS_init['roll'] + cmds_pipe['roll']
                     if ('throttle' in AUTONOMOUS_INPUT):
-                        if abs(cmds_pipe['throttle']) >= 0.0: # it doesn't make sense negative values here
+                        if cmds_pipe['throttle'] >= 0.0: # it doesn't make sense negative values here
                             # The received commands will always actuate FROM the default min value
                             CMDS['throttle'] = CMDS_init['throttle'] + cmds_pipe['throttle']
+            
                     frequencies_measurement['autonomous'] = time.time() - prev_time_ext
                     prev_time_ext = time.time()
+            
             events = dev.read()
             # This seems to be the best option, but it raises BlockinIOError when I try to process
             # events and there's none
