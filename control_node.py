@@ -13,8 +13,8 @@ class control():
         ''' Define all the parameter'''
         '''Basic parameter'''''
         self.PERIOD = 1/200               # Sleeping time
-        self.ABS_MAX_VALUE_ROLL = 50      # PID Roll limit
-        self.ABS_MAX_VALUE_PITCH = 50     # PID Pitch limit
+        self.ABS_MAX_VALUE_ROLL = 150      # PID Roll limit
+        self.ABS_MAX_VALUE_PITCH = 150     # PID Pitch limit
         self.ABS_MAX_VALUE_THROTTLE = 200 # PID Throttle limit
 
         '''Takeoff parameter'''
