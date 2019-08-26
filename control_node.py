@@ -144,7 +144,6 @@ class control():
                 # The betaflight config trim the pitch -10 for unbalance of the drone
                 CMDS['pitch']    = 0
                 # Let the OF Pipe run
-                control_optflow_pipe_read.send('a')
                 control_tof_pipe_read.send('a')
                 '''Read the joystick_node trigger the auto mode or not'''
                 if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
@@ -153,6 +152,7 @@ class control():
                         self.LANDING = True
                         init_altitude = None
                 
+
                 '''Update the IMU value'''
                 if control_imu_pipe_read.poll():
                     self.imu, battery_voltage, self.IMU_TIME = control_imu_pipe_read.recv() # [[accX,accY,accZ], [gyroX,gyroY,gyroZ], [roll,pitch,yaw]]
@@ -173,6 +173,29 @@ class control():
                                             [0]]) 
                     continue
 
+                '''Update the ToF value'''
+                # If not able to update, then predict
+                if control_tof_pipe_read.poll():
+                    if not init_altitude:
+                        altitude_sensor, self.TOF_Time = control_tof_pipe_read.recv() # Flushing the old value 
+                        # altitude_sensor = control_tof_pipe_read.recv() # Flushing the old value 
+                    else:
+                        # turning the altitdue back to ground, reference as global coordinate
+                        altitude_sensor, self.TOF_Time = control_tof_pipe_read.recv()
+                        #DEBUG USE
+                        toft=time.time()
+                        # The sensor is not at the center axis of rotation
+                        # The following parts are going to turn the offset bact the origin
+                        # ROLL: (Measure * cos(roll_angle)) - (sensor_offset * sin(sensor_angle - roll_angle)
+                        # PITCH: (Measure - offset) * cos(pitch_angle) 
+                        # combine: (Measure * cos(roll) * cos(pitch)) - (offset * sin(sensor-roll) * cos(pitch))
+                        # CogniFly offset -> z: -40mm, y: +38mm
+                        altitude_corrected = altitude_sensor * (np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
+                        offset = 0.05517 * np.sin(0.81 - (self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
+                        tof_filter.update([self.truncate(altitude_corrected-offset), self.truncate(((altitude_corrected-offset)-prev_altitude_sensor)/dt)])
+                else:
+                    tof_filter.predict(u = 0) #Just test for non -9.81*(0.99-imu[0][2])
+
                 '''Vertical Movement Control'''
                 if init_altitude:
                     # Update the ToF Filter
@@ -181,7 +204,6 @@ class control():
                     tof_filter.F[0,1] = dt if abs(dt<3) else 0
                     tof_filter.B[0] = 0.5*(dt**2) if abs(dt<3) else 0
                     tof_filter.B[1] = dt
-                    tof_filter.predict(u = 0) #Just test for non -9.81*(0.99-imu[0][2])
                     # Capture the Predicted value
                     altitude = tof_filter.x[0,0]
                     velocity = tof_filter.x[1,0]
@@ -208,34 +230,20 @@ class control():
                         CMDS['throttle'] += cancel_gravity_value / ((np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180)))
                         value_available = True 
                         prev_altitude_sensor = altitude_corrected
-
-                # LANDING
-                if not self.TAKEOFF and self.LANDING:
-                    print ("LANDING")
-                    CMDS['throttle'] = cancel_gravity_value + (15/(altitude+0.5))
-            
-                '''Update the ToF value'''
-                if control_tof_pipe_read.poll():
-                    if not init_altitude:
-                        altitude_sensor, self.TOF_Time = control_tof_pipe_read.recv() # Flushing the old value 
-                        # altitude_sensor = control_tof_pipe_read.recv() # Flushing the old value 
-                    else:
-                        # turning the altitdue back to ground, reference as global coordinate
-                        altitude_sensor, self.TOF_Time = control_tof_pipe_read.recv()
-                        #DEBUG USE
-                        toft=time.time()
-                        # The sensor is not at the center axis of rotation
-                        # The following parts are going to turn the offset bact the origin
-                        # ROLL: (Measure * cos(roll_angle)) - (sensor_offset * sin(sensor_angle - roll_angle)
-                        # PITCH: (Measure - offset) * cos(pitch_angle) 
-                        # combine: (Measure * cos(roll) * cos(pitch)) - (offset * sin(sensor-roll) * cos(pitch))
-                        # CogniFly offset -> z: -40mm, y: +38mm
-                        altitude_corrected = altitude_sensor * (np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
-                        offset = 0.05517 * np.sin(0.81 - (self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
-                        tof_filter.update([self.truncate(altitude_corrected-offset), self.truncate(((altitude_corrected-offset)-prev_altitude_sensor)/dt)])
-                            
+                                        
                 '''Update the XY Filter'''
-                # if ((not TAKEOFF) and (abs(error_altitude) < 0.2)):
+                # If not able to update, then predict
+                if control_optflow_pipe_read.poll():
+                    if (self.TAKEOFF):
+                        KFXY_z[0,0], KFXY_z[1,0], of_dis, self.OF_TIME = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
+                    else:
+                        #DEBUG USE
+                        oft=time.time()
+                        KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+                else:
+                    KFXY.predict(u=0)#KFXY_u) # [dx, dy, vx, vy]
+
+                '''X-Y movement Control'''
                 if (not self.TAKEOFF):
                     # For init reading will very large, but normal case would not larger than 1s
                     dt_OF = prev_time-self.OF_TIME
@@ -251,14 +259,8 @@ class control():
                     # linear speed can be optained by angluar_speed*height
                     KFXY_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
                     KFXY_u[3,0] = self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
-                    if control_optflow_pipe_read.poll():
-                        # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
-                        KFXY_z[0,0], KFXY_z[1,0], of_dis, self.OF_TIME = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
-                        #DEBUG USE
-                        oft=time.time()
-                        KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+
                     
-                    KFXY.predict(u=0)#KFXY_u) # [dx, dy, vx, vy]
 
                     OF_DIS += of_dis*altitude
                     '''X-Y control'''
@@ -288,6 +290,12 @@ class control():
                                                                                                 (self.OF_TIME-oft), 
                                                                                                 (self.IMU_TIME-imut),
                                                                                                 (self.TOF_Time -toft)))
+                
+                '''LANDING'''
+                if not self.TAKEOFF and self.LANDING:
+                    print ("LANDING")
+                    CMDS['throttle'] = cancel_gravity_value + (15/(altitude+0.5))
+                
                 '''Send out the CMDS values back to the joystick loop'''
                 if value_available and (not ext_control_pipe_read.poll()):
                     ext_control_pipe_write.send(CMDS)
