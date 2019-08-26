@@ -83,8 +83,7 @@ class Flow(io.IOBase):
                                     self.displacement,
                                     time.time()))
                 self.displacement *= 0 # Reset the displacement
-            self.pipe_write.recv()
-                
+             
             if self.DEBUG:
                 print("FLOW - Running at %2.2f Hz"%(1/(time.time()-self.start)))
             self.start = time.time()
