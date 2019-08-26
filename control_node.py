@@ -154,7 +154,6 @@ class control():
             # The betaflight config trim the pitch -10 for unbalance of the drone
             CMDS['pitch']    = 0
             # Let the OF Pipe run
-            control_optflow_pipe_read.send('a')
             control_tof_pipe_read.send('a')
             '''Read the joystick_node trigger the auto mode or not'''
             if ext_control_pipe_write.poll(): # joystick loop tells when to save the current values
