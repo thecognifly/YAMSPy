@@ -162,15 +162,13 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                     cmds_pipe = ext_contr_pipe.recv()
                     if ('pitch' in AUTONOMOUS_INPUT):
                         # The received commands will always actuate around the center positions
-                        if abs(cmds_pipe['pitch']) >= 0.0: # keeps the last command
-                            CMDS['pitch'] = CMDS_init['pitch'] + cmds_pipe['pitch']
+                        CMDS['pitch'] = CMDS_init['pitch'] + cmds_pipe['pitch']
                     if ('roll' in AUTONOMOUS_INPUT):
-                        if abs(cmds_pipe['roll']) >= 0.0: # keeps the last command
-                            CMDS['roll'] = CMDS_init['roll'] + cmds_pipe['roll']
+                        # The received commands will always actuate around the center positions
+                        CMDS['roll'] = CMDS_init['roll'] + cmds_pipe['roll']
                     if ('throttle' in AUTONOMOUS_INPUT):
-                        if abs(cmds_pipe['throttle']) >= 0.0: # keeps the last command
-                            # For the throttle it will need to use the last value
-                            # to keep the altitude
+                        if abs(cmds_pipe['throttle']) >= 0.0: # it doesn't make sense negative values here
+                            # The received commands will always actuate FROM the default min value
                             CMDS['throttle'] = CMDS_init['throttle'] + cmds_pipe['throttle']
                     frequencies_measurement['autonomous'] = time.time() - prev_time_ext
                     prev_time_ext = time.time()
