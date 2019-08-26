@@ -20,7 +20,7 @@ class Flow(io.IOBase):
         self.DEBUG = DEBUG
 
         # @ Alpha Filter parameter
-        self.a = 0.5
+        self.a = 0.2
         self.pre_x = 0
         self.pre_y = 0
 
