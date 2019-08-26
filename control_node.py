@@ -144,6 +144,10 @@ class control():
         # For init
         error_altitude = error_roll = error_pitch = velocity_pitch = velocity_roll = 0
 
+        '''Angular Speed'''
+        pre_roll = 0
+        pre_pitch = 0
+
         while True:
             try:
                 CMDS['throttle'] = 0 
@@ -169,6 +173,13 @@ class control():
                     if self.TAKEOFF:
                         # Tested voltage throttle relationship
                         TAKEOFF_THRUST = int(1015-60*(battery_voltage))
+
+                '''Calc Angular Speed'''
+                if init_altitude:
+                    angu_roll = (self.imu[2][0]-pre_roll)/(prev_time-self.IMU_TIME)
+                    angu_pitch = (self.imu[2][1]-pre_pitch)/(prev_time-self.IMU_TIME)
+                    pre_roll = self.imu[2][0]
+                    pre_pitch = self.imu[2][1]
 
                 '''Update the ToF Kalman Filter with the ground value'''
                 if postition_hold and altitude_sensor:
@@ -288,6 +299,7 @@ class control():
                     print ("OF Distance: ",OF_DIS)  
                     print("THROTTLE :{2:.2f}    | ALT:{1:.2f}   |   ERR:{0:.2f}     |   Vec:{3:.2f}".format(error_altitude, altitude, next_throttle, velocity))
                     print("dt_OF:{:.2f} |   dt_IMU:{:.2f}".format(dt_OF,dt_IMU))
+                    print("Angular Roll: {:.2f}     |   Pitch: {:.2f}".format(angu_roll, angu_pitch))
                     print("ERROR ROLL : %2.2f  error|  %2.2f roll|  %2.2f of" %(error_roll, next_roll, 0))
                     print("ERROR PITCH: %2.2f  error|  %2.2f pitch|  %2.2f of" %(error_pitch, next_pitch, 0))
                     print("ROLL velocity: ", -KFXY.x[3,0], KFXY_z[1,0]*(-altitude), self.truncate((self.imu[2][0]*np.pi*1/180*altitude/dt)))
