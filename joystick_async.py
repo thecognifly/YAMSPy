@@ -304,6 +304,10 @@ async def joystick_interface(dev, ext_contr_pipe = None):
             print("Joystick lost...")
             joystick_lost = True
             break
+        except:
+            print("Something else broke joystick_interface...")
+            joystick_lost = True
+            break            
 
         frequencies_measurement['joystick_interface'] = time.time() - prev_time
         prev_time = time.time()
