@@ -13,8 +13,8 @@ class control():
         ''' Define all the parameter'''
         '''Basic parameter'''''
         self.PERIOD = 1/200               # Sleeping time
-        self.ABS_MAX_VALUE_ROLL = 150      # PID Roll limit
-        self.ABS_MAX_VALUE_PITCH = 150     # PID Pitch limit
+        self.ABS_MAX_VALUE_ROLL = 250      # PID Roll limit
+        self.ABS_MAX_VALUE_PITCH = 250     # PID Pitch limit
         self.ABS_MAX_VALUE_THROTTLE = 200 # PID Throttle limit
 
         '''Takeoff parameter'''
@@ -33,6 +33,9 @@ class control():
         self.DATA = False
         self.data = []
 
+        '''Alpha Filter'''
+        self.a = 0.1
+
         '''Time'''
         self.IMU_TIME = 0 # IMU Timestamp
         self.OF_TIME  = 0 # Optical Flow Timestamp
@@ -40,13 +43,13 @@ class control():
 
         '''PID'''
         #Pitch PID G0
-        self.PX_GAIN = 15
+        self.PX_GAIN = 150
         self.IX_GAIN = 0.01
-        self.DX_GAIN = 14
+        self.DX_GAIN = 80#100 #14
         #Roll PID Gain
-        self.PY_GAIN = 15
+        self.PY_GAIN = 150
         self.IY_GAIN = 0.01
-        self.DY_GAIN = 14
+        self.DY_GAIN = 80#100 #14
         #Altitude PID Gain
         # For 2S battery
         self.PZ_GAIN = 60
@@ -123,8 +126,10 @@ class control():
         throttle_pd = PID(self.PZ_GAIN, self.IZ_GAIN, self.DZ_GAIN)    #throttle PID
         roll_pd = PID(self.PY_GAIN, self.IY_GAIN, self.DY_GAIN)        #roll PID
         pitch_pd = PID(self.PX_GAIN, self.IX_GAIN, self.DX_GAIN)       #pitch PID
-        init_x = 0
-        init_y = 0
+        prev_velocity_pitch = 0
+        prev_velocity_roll = 0
+        prev_error_roll = 0
+        prev_error_pitch = 0
 
         '''Z-axis init'''       
         prev_altitude_sensor = None
@@ -257,34 +262,41 @@ class control():
                 # For init reading will very large, but normal case would not larger than 1s
                 dt_OF = prev_time-self.OF_TIME
                 dt_IMU = prev_time-self.IMU_TIME
-                KFXY.R[0,0] = (0.005+(velocity/90)) # Increase the noise for the filter when up and down 
-                KFXY.R[1,1] = (0.005+(velocity/90))
-                # For init reading will very large, but normal case would not larger than 1s
-                KFXY.F[0,2] = dt_OF if abs(dt_OF<3) else 0
-                KFXY.F[1,3] = dt_OF if abs(dt_OF<3) else 0
-                KFXY.B[2,2] = dt_IMU if abs(dt_IMU<3) else 0
-                KFXY.B[3,3] = dt_IMU if abs(dt_IMU<3) else 0
-                # Another angular speed can be optained by (atitude/dt)
-                # linear speed can be optained by angluar_speed*height
-                KFXY_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
-                KFXY_u[3,0] = self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
+                # KFXY.R[0,0] = (0.005+(velocity/90)) # Increase the noise for the filter when up and down 
+                # KFXY.R[1,1] = (0.005+(velocity/90))
+                # # For init reading will very large, but normal case would not larger than 1s
+                # KFXY.F[0,2] = dt_OF if abs(dt_OF<3) else 0
+                # KFXY.F[1,3] = dt_OF if abs(dt_OF<3) else 0
+                # KFXY.B[2,2] = dt_IMU if abs(dt_IMU<3) else 0
+                # KFXY.B[3,3] = dt_IMU if abs(dt_IMU<3) else 0
+                # # Another angular speed can be optained by (atitude/dt)
+                # # linear speed can be optained by angluar_speed*height
+                # KFXY_u[2,0] = self.truncate(9.81*(self.imu[0][0])*np.cos(self.imu[2][1])) #imu[0][0]->ax Pitch acc #imu[2][1]->Pitch angle
+                # KFXY_u[3,0] = self.truncate(9.81*(self.imu[0][1])*np.cos(self.imu[2][0])) #imu[0][1]->ay Roll acc  #imu[2][0]->Roll angle
                 if control_optflow_pipe_read.poll():
-                    # KFXY_z[0,0], KFXY_z[1,0] = control_optflow_pipe_read.recv()
                     KFXY_z[0,0], KFXY_z[1,0], of_dis, self.OF_TIME = control_optflow_pipe_read.recv() # it will block until a brand new value comes.
                     #DEBUG USE
                     oft=time.time()
-                    KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
+                    # KFXY.update(KFXY_z*(-altitude))# To real scale # X-Y reversed
                 
-                KFXY.predict(u=0)#KFXY_u) # [dx, dy, vx, vy]
+                # KFXY.predict(u=0)#KFXY_u) # [dx, dy, vx, vy]
 
                 OF_DIS += of_dis*altitude
                 '''X-Y control'''
-                # error_roll  =self.truncate((init_y - KFXY.x[1,0]))
-                # error_pitch =self.truncate((init_x - KFXY.x[0,0]))
-                error_roll  = self.truncate((OF_DIS[1]))
-                error_pitch = self.truncate((OF_DIS[0]))
-                velocity_roll = self.truncate(KFXY_z[1,0]*(-altitude))
-                velocity_pitch = self.truncate(KFXY_z[0,0]*(-altitude))
+                factor = 1.6 #Seem the data is scaled up 1.6 times 
+
+                error_roll  = self.truncate((OF_DIS[1])/factor)
+                error_pitch = self.truncate((OF_DIS[0])/factor)
+                velocity_roll_tmp = -self.truncate((error_roll-prev_error_roll)/dt_OF)
+                velocity_pitch_tmp = -self.truncate((error_pitch-prev_error_pitch)/dt_OF)
+                prev_error_roll = error_roll
+                prev_error_pitch = error_pitch
+                # velocity_roll = self.truncate(KFXY_z[1,0]*(-altitude))
+                # velocity_pitch = self.truncate(KFXY_z[0,0]*(-altitude))
+                velocity_roll += self.a*(velocity_roll_tmp - prev_velocity_roll)
+                velocity_pitch += self.a*(velocity_pitch_tmp - prev_velocity_pitch)
+                prev_velocity_roll = velocity_roll
+                prev_velocity_pitch = velocity_pitch
                 # velocity_roll = self.truncate(KFXY.x[3,0])
                 # velocity_pitch = self.truncate(KFXY.x[2,0])
                 next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
