@@ -36,6 +36,7 @@ import signal
 from collections import deque
 from multiprocessing import Process, Pipe
 import os
+import numpy as np
 
 # pip install uvloop
 import uvloop
@@ -64,12 +65,14 @@ JOYSTICK_FREQ = 20
 MAIN_FREQ = 50
 READ_VOLT_FC_FREQ = 1
 
+DATA = []
+
 # TIMEOUT = 1/MAIN_FREQ
 # TIMEOUT_JOYSTICK = 1/JOYSTICK_FREQ # this is only useful to avoid locking at shutdown
 
 
 # List of inputs that will be taken over when in autonomous mode
-AUTONOMOUS_INPUT = ['roll','pitch','throttle'] #['roll', 'pitch', 'throttle']
+AUTONOMOUS_INPUT = [] #['roll', 'pitch', 'throttle']
 
 # Using MSP controller it's possible to have more auxiliary inputs than this.
 CMDS_init = {
@@ -148,6 +151,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
     And it's configured to use Receiver as MSP RX input 
     """
     global fc_reboot
+    global DATA
 
     print("joystick_interface started...")
 
@@ -300,6 +304,7 @@ async def joystick_interface(dev, ext_contr_pipe = None):
                                 print('>>>>>>>>>>>>>MANUAL MODE...')
                                 dev.write(ecodes.EV_FF, effect_id, 1)
 
+            DATA.append((CMDS['throttle'], CMDS['roll'], CMDS['pitch'], time.time()))
         # except asyncio.TimeoutError:
             # continue
         except BlockingIOError:
@@ -556,8 +561,10 @@ if __name__ == '__main__':
         run_loop((ext_control_pipe_read, (control_imu_pipe_write, control_imu_pipe_read)))
     
     finally:
+        np.save("joy", DATA)
         print("Killing Processes...")
         control_process.terminate()
+        time.sleep(3)
         camera_process.terminate()
         ToF_process.terminate()
         print("Killing Processes... done!")
