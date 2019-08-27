@@ -20,7 +20,7 @@ class control():
         '''Takeoff parameter'''
         self.TAKEOFF_ALTITUDE = 1#m     # Take off altitude
         self.TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
-        self.TAKEOFF_LIST = np.zeros(20)  # Creating the take off curve
+        self.TAKEOFF_LIST = np.zeros(10)  # Creating the take off curve
         for t in range(len(self.TAKEOFF_LIST)):
             self.TAKEOFF_LIST[t] = ((1-(1/np.exp(t))))# act like a cap-charge shape
         self.TAKEOFF_LIST = self.TAKEOFF_LIST.tolist()
@@ -229,7 +229,6 @@ class control():
 
             # LANDING
             if not self.TAKEOFF and self.LANDING:
-                print ("LANDING")
                 CMDS['throttle'] = cancel_gravity_value + (15/(altitude+0.5))
         
             '''Update the ToF value'''
@@ -308,9 +307,9 @@ class control():
                                                                                             (self.IMU_TIME-imut),
                                                                                             (self.TOF_Time -toft)))
                 
-                self.data.append((CMDS, altitude, error_altitude, velocity, 
-                                  error_roll, velocity_roll, 
-                                  error_pitch, velocity_pitch))
+                self.data.append((CMDS['throttle'], CMDS['roll'], CMDS['pitch'], altitude, error_altitude, velocity, 
+                                  error_roll, velocity_roll, angu_roll,
+                                  error_pitch, velocity_pitch, angu_pitch))
 
             if self.DATA:
                 np.save("data", self.data)
