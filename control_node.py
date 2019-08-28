@@ -43,13 +43,13 @@ class control():
 
         '''PID'''
         #Pitch PID G0
-        self.PX_GAIN = 150
+        self.PX_GAIN = 170
         self.IX_GAIN = 0.01
-        self.DX_GAIN = 80#100 #14
+        self.DX_GAIN = 120#100 #14
         #Roll PID Gain
-        self.PY_GAIN = 150
+        self.PY_GAIN = 170
         self.IY_GAIN = 0.01
-        self.DY_GAIN = 80#100 #14
+        self.DY_GAIN = 120#100 #14
         #Altitude PID Gain
         # For 2S battery
         self.PZ_GAIN = 60
@@ -217,6 +217,7 @@ class control():
                         self.TAKEOFF_LIST.pop(0)
                         cancel_gravity_value = CMDS['throttle']
                     else:
+                        control_optflow_pipe_read.send('a')
                         init_altitude = self.TAKEOFF_ALTITUDE 
                         velocity = 0
                         self.TAKEOFF = False
@@ -287,16 +288,16 @@ class control():
 
                 error_roll  = self.truncate((OF_DIS[1])/factor)
                 error_pitch = self.truncate((OF_DIS[0])/factor)
-                velocity_roll_tmp = -self.truncate((error_roll-prev_error_roll)/dt_OF)
-                velocity_pitch_tmp = -self.truncate((error_pitch-prev_error_pitch)/dt_OF)
-                prev_error_roll = error_roll
-                prev_error_pitch = error_pitch
-                # velocity_roll = self.truncate(KFXY_z[1,0]*(-altitude))
-                # velocity_pitch = self.truncate(KFXY_z[0,0]*(-altitude))
-                velocity_roll += self.a*(velocity_roll_tmp - prev_velocity_roll)
-                velocity_pitch += self.a*(velocity_pitch_tmp - prev_velocity_pitch)
-                prev_velocity_roll = velocity_roll
-                prev_velocity_pitch = velocity_pitch
+                velocity_roll = self.truncate(KFXY_z[1,0]*(-altitude))
+                velocity_pitch = self.truncate(KFXY_z[0,0]*(-altitude))
+                # prev_error_roll = error_roll
+                # prev_error_pitch = error_pitch
+                # velocity_roll_tmp = -self.truncate((error_roll-prev_error_roll)/dt_OF)
+                # velocity_pitch_tmp = -self.truncate((error_pitch-prev_error_pitch)/dt_OF)
+                # velocity_roll += self.a*(velocity_roll_tmp - prev_velocity_roll)
+                # velocity_pitch += self.a*(velocity_pitch_tmp - prev_velocity_pitch)
+                # prev_velocity_roll = velocity_roll
+                # prev_velocity_pitch = velocity_pitch
                 # velocity_roll = self.truncate(KFXY.x[3,0])
                 # velocity_pitch = self.truncate(KFXY.x[2,0])
                 next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
