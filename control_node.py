@@ -18,7 +18,7 @@ class control():
         self.ABS_MAX_VALUE_THROTTLE = 200 # PID Throttle limit
 
         '''Takeoff parameter'''
-        self.TAKEOFF_ALTITUDE = 1#m     # Take off altitude
+        self.TAKEOFF_ALTITUDE = 0.7#m     # Take off altitude
         self.TAKEOFF_THRUST = 360 #12.35V ->360  # 11.6V -> 400 #11.31 -> 410 # weight -> 340 # 420 is too much for takeoff
         self.TAKEOFF_LIST = np.zeros(10)  # Creating the take off curve
         for t in range(len(self.TAKEOFF_LIST)):
@@ -34,7 +34,7 @@ class control():
         self.data = []
 
         '''Alpha Filter'''
-        self.a = 0.1
+        self.a = 1
 
         '''Time'''
         self.IMU_TIME = 0 # IMU Timestamp
@@ -43,13 +43,13 @@ class control():
 
         '''PID'''
         #Pitch PID G0
-        self.PX_GAIN = 170
-        self.IX_GAIN = 0.01
-        self.DX_GAIN = 120#100 #14
+        self.PX_GAIN = 100
+        self.IX_GAIN = 0.
+        self.DX_GAIN = 100 #14
         #Roll PID Gain
-        self.PY_GAIN = 170
-        self.IY_GAIN = 0.01
-        self.DY_GAIN = 120#100 #14
+        self.PY_GAIN = 100
+        self.IY_GAIN = 0.
+        self.DY_GAIN = 100 #14
         #Altitude PID Gain
         # For 2S battery
         self.PZ_GAIN = 60
@@ -217,7 +217,7 @@ class control():
                         self.TAKEOFF_LIST.pop(0)
                         cancel_gravity_value = CMDS['throttle']
                     else:
-                        control_optflow_pipe_read.send('a')
+                        # control_optflow_pipe_read.send('a')
                         init_altitude = self.TAKEOFF_ALTITUDE 
                         velocity = 0
                         self.TAKEOFF = False
@@ -288,8 +288,12 @@ class control():
 
                 error_roll  = self.truncate((OF_DIS[1])/factor)
                 error_pitch = self.truncate((OF_DIS[0])/factor)
-                velocity_roll = self.truncate(KFXY_z[1,0]*(-altitude))
-                velocity_pitch = self.truncate(KFXY_z[0,0]*(-altitude))
+                velocity_roll_tmp = self.truncate(KFXY_z[1,0]*(-altitude))
+                velocity_pitch_tmp = self.truncate(KFXY_z[0,0]*(-altitude))
+                self.a = np.exp(-abs(velocity_pitch_tmp - velocity_pitch))
+                velocity_pitch += self.a * (velocity_pitch_tmp - velocity_pitch)
+                self.a = np.exp(-abs(velocity_roll_tmp - velocity_roll))
+                velocity_roll  += self.a * (velocity_roll_tmp - velocity_roll)
                 # prev_error_roll = error_roll
                 # prev_error_pitch = error_pitch
                 # velocity_roll_tmp = -self.truncate((error_roll-prev_error_roll)/dt_OF)
@@ -325,7 +329,7 @@ class control():
                                   error_pitch, velocity_pitch, angu_pitch))
 
             if self.DATA:
-                np.save("data", self.data)
+                np.save("control_t_auto", self.data)
                 print (">>>>>>>>>>>>>>>>>>SAVED!")
                 self.DATA = False
             
