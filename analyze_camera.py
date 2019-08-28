@@ -19,8 +19,12 @@ class Flow(io.IOBase):
         # @ For Debug use
         self.DEBUG = DEBUG
 
+        # @ Motion var
+        self.x_motion = 0
+        self.y_motion = 0
+
         # @ Alpha Filter parameter
-        self.a = 0.2
+        self.a = 0.6
         self.pre_x = 0
         self.pre_y = 0
 
@@ -67,19 +71,19 @@ class Flow(io.IOBase):
             #DEBUG Checking the hold loop will recv the updatest data
             # if self.pipe_write.poll():
             data = (np.frombuffer(b, dtype=self.motion_dtype).reshape((self.rows, self.cols)))
-            x_motion = np.sum(data['x'])*self.flow
-            y_motion = np.sum(data['y'])*self.flow
-            x_motion = 0 if abs(x_motion) < 0.01 else x_motion # smaller than 1cm, think is noise
-            y_motion = 0 if abs(y_motion) < 0.01 else y_motion
-            x_motion += self.a*(x_motion - self.pre_x)
-            y_motion += self.a*(y_motion - self.pre_y)
-            self.pre_x = x_motion
-            self.pre_y = y_motion
-            self.displacement[0] += (x_motion*(time.time()-self.start)) # velocity to displacement
-            self.displacement[1] += (y_motion*(time.time()-self.start))
+            x_motion_tmp = np.sum(data['x'])*self.flow
+            y_motion_tmp = np.sum(data['y'])*self.flow
+            x_motion_tmp = 0 if abs(x_motion_tmp) < 0.01 else x_motion_tmp # smaller than 1cm, think is noise
+            y_motion_tmp = 0 if abs(y_motion_tmp) < 0.01 else y_motion_tmp
+            self.x_motion += self.a*(x_motion_tmp - self.pre_x)
+            self.y_motion += self.a*(y_motion_tmp - self.pre_y)
+            self.pre_x = self.x_motion
+            self.pre_y = self.y_motion
+            self.displacement[0] += (self.x_motion*(time.time()-self.start)) # velocity to displacement
+            self.displacement[1] += (self.y_motion*(time.time()-self.start))
             if not self.pipe_read.poll(): 
-                self.pipe_write.send((x_motion, 
-                                    y_motion, 
+                self.pipe_write.send((self.x_motion, 
+                                    self.y_motion, 
                                     self.displacement,
                                     time.time()))
                 self.displacement *= 0 # Reset the displacement
