@@ -24,7 +24,7 @@ class Flow(io.IOBase):
         self.y_motion = 0
 
         # @ Alpha Filter parameter
-        self.a = 0.6
+        self.a = 0.3
         self.pre_x = 0
         self.pre_y = 0
 
@@ -73,14 +73,22 @@ class Flow(io.IOBase):
             data = (np.frombuffer(b, dtype=self.motion_dtype).reshape((self.rows, self.cols)))
             x_motion_tmp = np.sum(data['x'])*self.flow
             y_motion_tmp = np.sum(data['y'])*self.flow
+
             x_motion_tmp = 0 if abs(x_motion_tmp) < 0.01 else x_motion_tmp # smaller than 1cm, think is noise
             y_motion_tmp = 0 if abs(y_motion_tmp) < 0.01 else y_motion_tmp
+
+            self.displacement[0] += (x_motion_tmp*(time.time()-self.start)) # velocity to displacement
+            self.displacement[1] += (y_motion_tmp*(time.time()-self.start))
+
             self.x_motion += self.a*(x_motion_tmp - self.pre_x)
             self.y_motion += self.a*(y_motion_tmp - self.pre_y)
+            
             self.pre_x = self.x_motion
             self.pre_y = self.y_motion
-            self.displacement[0] += (self.x_motion*(time.time()-self.start)) # velocity to displacement
-            self.displacement[1] += (self.y_motion*(time.time()-self.start))
+            #reset the filter
+            if self.pipe_write.poll():
+                self.x_motion = x_motion_tmp
+                self.y_motion = y_motion_tmp
             if not self.pipe_read.poll(): 
                 self.pipe_write.send((self.x_motion, 
                                     self.y_motion, 
