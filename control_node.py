@@ -33,6 +33,13 @@ class control():
         self.DATA = False
         self.data = []
 
+        '''ToF sensor offset'''
+        # CogniFly offset -> z: -40mm, y: +38mm
+        self.TOFOFFSET_Z = 0.04 #m
+        self.TOFOFFSET_Y = 0.038 #m
+        self.TOFOFFSET_R = np.sqrt(self.TOFOFFSET_Z**2 + self.TOFOFFSET_Y**2)
+        self.TOFOFFSET_ANGLE = np.tan(self.TOFOFFSET_Z/self.TOFOFFSET_Y)
+
         '''Alpha Filter'''
         self.a = 1
 
@@ -254,7 +261,7 @@ class control():
                     # combine: (Measure * cos(roll) * cos(pitch)) - (offset * sin(sensor-roll) * cos(pitch))
                     # CogniFly offset -> z: -40mm, y: +38mm
                     altitude_corrected = altitude_sensor * (np.cos(self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
-                    offset = 0.05517 * np.sin(0.81 - (self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
+                    offset = self.TOFOFFSET_R * np.sin(self.TOFOFFSET_ANGLE - (self.imu[2][0]*np.pi*1/180)) * (np.cos(self.imu[2][1]*np.pi*1/180))
                     tof_filter.update([self.truncate(altitude_corrected-offset), self.truncate(((altitude_corrected-offset)-prev_altitude_sensor)/dt)])
                         
             '''Update the XY Filter'''
