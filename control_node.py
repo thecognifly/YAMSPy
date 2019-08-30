@@ -15,7 +15,7 @@ class control():
         self.PERIOD = 1/200               # Sleeping time
         self.ABS_MAX_VALUE_ROLL = 250      # PID Roll limit
         self.ABS_MAX_VALUE_PITCH = 250     # PID Pitch limit
-        self.ABS_MAX_VALUE_THROTTLE = 200 # PID Throttle limit
+        self.ABS_MAX_VALUE_THROTTLE = 300 # PID Throttle limit
 
         '''Takeoff parameter'''
         self.TAKEOFF_ALTITUDE = 0.7#m     # Take off altitude
@@ -35,8 +35,11 @@ class control():
 
         '''ToF sensor offset'''
         # CogniFly offset -> z: -40mm, y: +38mm
-        self.TOFOFFSET_Z = 0.04 #m
-        self.TOFOFFSET_Y = 0.038 #m
+        # self.TOFOFFSET_Z = 0.04 #m
+        # self.TOFOFFSET_Y = 0.038 #m
+        self.TOFOFFSET_Z = -0.02 #m
+        self.TOFOFFSET_Y = -0.045 #m
+
         self.TOFOFFSET_R = np.sqrt(self.TOFOFFSET_Z**2 + self.TOFOFFSET_Y**2)
         self.TOFOFFSET_ANGLE = np.tan(self.TOFOFFSET_Z/self.TOFOFFSET_Y)
 
@@ -50,17 +53,17 @@ class control():
 
         '''PID'''
         #Pitch PID G0
-        self.PX_GAIN = 100
+        self.PX_GAIN = 90
         self.IX_GAIN = 0.
-        self.DX_GAIN = 100 #14
+        self.DX_GAIN = 103 
         #Roll PID Gain
-        self.PY_GAIN = 100
+        self.PY_GAIN = 90
         self.IY_GAIN = 0.
-        self.DY_GAIN = 100 #14
+        self.DY_GAIN = 103
         #Altitude PID Gain
         # For 2S battery
         self.PZ_GAIN = 60
-        self.IZ_GAIN = 0.1
+        self.IZ_GAIN = 0.19
         self.DZ_GAIN = 35
                 
         '''IMU value init''' 
@@ -311,8 +314,10 @@ class control():
                 # prev_velocity_pitch = velocity_pitch
                 # velocity_roll = self.truncate(KFXY.x[3,0])
                 # velocity_pitch = self.truncate(KFXY.x[2,0])
-                next_roll = roll_pd.calc(error_roll, velocity=-velocity_roll) # Y
-                next_pitch = pitch_pd.calc(error_pitch, velocity=-velocity_pitch) # X
+
+                # The new cognifly is reversed the pi orientation
+                next_roll = roll_pd.calc(-error_roll, velocity=velocity_roll) # Y
+                next_pitch = pitch_pd.calc(-error_pitch, velocity=velocity_pitch) # X
                 CMDS['roll'] = next_roll if abs(next_roll) <= self.ABS_MAX_VALUE_ROLL else (-1 if next_roll < 0 else 1)*self.ABS_MAX_VALUE_ROLL 
                 CMDS['pitch'] = next_pitch if abs(next_pitch) <= self.ABS_MAX_VALUE_PITCH else (-1 if next_pitch < 0 else 1)*self.ABS_MAX_VALUE_PITCH 
                 value_available = True
