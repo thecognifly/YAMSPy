@@ -964,24 +964,24 @@ class MSPy:
         bytes
             data received
         """
-
+        local_read = self.conn.read
         while True:
-            msg_header = self.conn.read()
+            msg_header = local_read()
             if msg_header:
                 if ord(msg_header) == 36: # $
                     break
         if not size:
-            msg_header += self.conn.read(3) # M + > or < + frame size
+            msg_header += local_read(3) # M + > or < + frame size
             frame_size = msg_header[-1]
             if frame_size == MSPy.JUMBO_FRAME_SIZE_LIMIT:
                 # since it's a JUMBO frame, it's necessary to process it more carefully
                 return msg_header
             else:
-                msg = self.conn.read(msg_header[-1] + 2) # +2 for msg code and crc
+                msg = local_read(msg_header[-1] + 2) # +2 for msg code and crc
             
                 return msg_header + msg
         else:
-            msg = self.conn.read(size - 1) # -1 to compensate for the $
+            msg = local_read(size - 1) # -1 to compensate for the $
             return msg_header + msg
 
 
@@ -999,6 +999,8 @@ class MSPy:
         dataHandler = self.dataHandler_init.copy()
 
         received_bytes = self.receive_raw_msg()
+
+        local_read = self.conn.read
 
         di = 0
         while True:
@@ -1040,7 +1042,7 @@ class MSPy:
                 if dataHandler['message_length_expected'] == MSPy.JUMBO_FRAME_SIZE_LIMIT:
                     logging.debug("JumboFrame received.")
                     dataHandler['messageIsJumboFrame'] = True
-                    received_bytes += self.conn.read()
+                    received_bytes += local_read()
 
                 # start the checksum procedure
                 dataHandler['message_checksum'] = (data)
@@ -1054,7 +1056,7 @@ class MSPy:
                     # process payload
                     if dataHandler['messageIsJumboFrame']:
                         dataHandler['state'] = 5
-                        received_bytes += self.conn.read()
+                        received_bytes += local_read()
                     else:
                         dataHandler['state'] = 7
                 else:
@@ -1068,7 +1070,7 @@ class MSPy:
                 dataHandler['message_checksum'] ^= (data)
 
                 dataHandler['state'] = 6
-                received_bytes += self.conn.read()
+                received_bytes += local_read()
 
             elif dataHandler['state'] == 6:
                 # calculates the JumboFrame size
@@ -1080,7 +1082,7 @@ class MSPy:
                 dataHandler['message_checksum'] ^= (data)
 
                 dataHandler['state'] = 7
-                received_bytes += self.conn.read(dataHandler['message_length_expected']+1) # +1 for CRC
+                received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
 
             elif dataHandler['state'] == 7:
                 # setup buffer according to the message_length_expected
