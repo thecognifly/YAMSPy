@@ -51,6 +51,7 @@ import logging
 import struct
 import time
 import sys
+from threading import Lock
 
 import ctypes
 libc = ctypes.cdll.LoadLibrary('libc.so.6') # this is only for ffs... it should be directly implemented.
@@ -783,6 +784,9 @@ class MSPy:
 
         self.ser_trials = trials
 
+        self.serial_port_write_lock = Lock()
+        self.serial_port_read_lock = Lock()
+
     def __enter__(self):
         self.is_serial_open = not self.connect(trials=self.ser_trials)
 
@@ -964,25 +968,26 @@ class MSPy:
         bytes
             data received
         """
-        local_read = self.conn.read
-        while True:
-            msg_header = local_read()
-            if msg_header:
-                if ord(msg_header) == 36: # $
-                    break
-        if not size:
-            msg_header += local_read(3) # M + > or < + frame size
-            frame_size = msg_header[-1]
-            if frame_size == MSPy.JUMBO_FRAME_SIZE_LIMIT:
-                # since it's a JUMBO frame, it's necessary to process it more carefully
-                return msg_header
+        with self.serial_port_read_lock: # It's necessary to lock everything because order is important
+            local_read = self.conn.read
+            while True:
+                msg_header = local_read()
+                if msg_header:
+                    if ord(msg_header) == 36: # $
+                        break
+            if not size:
+                msg_header += local_read(3) # M + > or < + frame size
+                frame_size = msg_header[-1]
+                if frame_size == MSPy.JUMBO_FRAME_SIZE_LIMIT:
+                    # since it's a JUMBO frame, it's necessary to process it more carefully
+                    return msg_header
+                else:
+                    msg = local_read(msg_header[-1] + 2) # +2 for msg code and crc
+                
+                    return msg_header + msg
             else:
-                msg = local_read(msg_header[-1] + 2) # +2 for msg code and crc
-            
+                msg = local_read(size - 1) # -1 to compensate for the $
                 return msg_header + msg
-        else:
-            msg = local_read(size - 1) # -1 to compensate for the $
-            return msg_header + msg
 
 
 
@@ -1001,133 +1006,133 @@ class MSPy:
         received_bytes = self.receive_raw_msg()
 
         local_read = self.conn.read
+        with self.serial_port_read_lock: # It's necessary to lock everything because order is important
+            di = 0
+            while True:
+                data = received_bytes[di]
+                di += 1
+                dataHandler['last_received_timestamp'] = time.time()
 
-        di = 0
-        while True:
-            data = received_bytes[di]
-            di += 1
-            dataHandler['last_received_timestamp'] = time.time()
+                logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
+                                                                        dataHandler['state'], 
+                                                                        data))
 
-            logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
-                                                                      dataHandler['state'], 
-                                                                      data))
+                # it will always fall in the first state by default
+                if dataHandler['state'] == 0: # sync char 1
+                    if ((data) == 36): # $ - a new MSP message begins with $
+                        dataHandler['state'] = 1
 
-            # it will always fall in the first state by default
-            if dataHandler['state'] == 0: # sync char 1
-                if ((data) == 36): # $ - a new MSP message begins with $
-                    dataHandler['state'] = 1
-
-            elif dataHandler['state'] == 1: # sync char 2
-                if ((data) == 77): # M - followed by an M
-                    dataHandler['state'] = 2
-                else: # something went wrong, no M received...
-                    logging.warning('Something went wrong, no M received.')
-                    break # sends it to the error state
-
-            elif dataHandler['state'] == 2: # direction (should be >)
-                dataHandler['unsupported'] = 0
-                if ((data) == 62): # > FC to PC
-                    dataHandler['message_direction'] = 1
-                elif ((data) == 60): # < PC to FC
-                    dataHandler['message_direction'] = 0
-                elif ((data) == 33): # !
-                    # FC reports unsupported message error
-                    logging.warning('FC reports unsupported message error.')
-                    dataHandler['unsupported'] = 1
-
-                dataHandler['state'] = 3
-
-            elif dataHandler['state'] == 3:
-                dataHandler['message_length_expected'] = (data)
-                if dataHandler['message_length_expected'] == MSPy.JUMBO_FRAME_SIZE_LIMIT:
-                    logging.debug("JumboFrame received.")
-                    dataHandler['messageIsJumboFrame'] = True
-                    received_bytes += local_read()
-
-                # start the checksum procedure
-                dataHandler['message_checksum'] = (data)
-                dataHandler['state'] = 4
-
-            elif dataHandler['state'] == 4:
-                dataHandler['code'] = (data)
-                dataHandler['message_checksum'] ^= (data)
-
-                if dataHandler['message_length_expected'] > 0:
-                    # process payload
-                    if dataHandler['messageIsJumboFrame']:
-                        dataHandler['state'] = 5
-                        received_bytes += local_read()
-                    else:
-                        dataHandler['state'] = 7
-                else:
-                    # no payload
-                    dataHandler['state'] = 9
-
-            elif dataHandler['state'] == 5:
-                # this is a JumboFrame
-                dataHandler['message_length_expected'] = (data)
-
-                dataHandler['message_checksum'] ^= (data)
-
-                dataHandler['state'] = 6
-                received_bytes += local_read()
-
-            elif dataHandler['state'] == 6:
-                # calculates the JumboFrame size
-                dataHandler['message_length_expected'] +=  256 * (data)
-                logging.debug("JumboFrame message_length_expected: {}".format(dataHandler['message_length_expected']))
-                # There's no way to check for transmission errors here...
-                # In the worst scenario, it will try to read 255 + 256*255 = 65535 bytes
-
-                dataHandler['message_checksum'] ^= (data)
-
-                dataHandler['state'] = 7
-                received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
-
-            elif dataHandler['state'] == 7:
-                # setup buffer according to the message_length_expected
-                dataHandler['message_buffer'] = bytearray(dataHandler['message_length_expected'])
-                dataHandler['message_buffer_uint8_view'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-
-                # payload
-                dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = (data)
-                dataHandler['message_checksum'] ^= (data)
-                dataHandler['message_length_received'] += 1
-
-                if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
-                    dataHandler['state'] = 9
-                else:
-                    dataHandler['state'] = 8
-
-            elif dataHandler['state'] == 8:
-                # payload
-                dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = (data)
-                dataHandler['message_checksum'] ^= (data)
-                dataHandler['message_length_received'] += 1
-
-                if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
-                    dataHandler['state'] = 9
-
-            elif dataHandler['state'] == 9:
-                    if dataHandler['message_checksum'] == (data):
-                        # checksum is correct, message received, store dataview
-                        logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
-                        dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                        return dataHandler
-                    else:
-                        # wrong checksum
-                        logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
-                                                                                                       (data),
-                                                                                                       dataHandler['message_checksum']))
-                        dataHandler['crcError'] = True
+                elif dataHandler['state'] == 1: # sync char 2
+                    if ((data) == 77): # M - followed by an M
+                        dataHandler['state'] = 2
+                    else: # something went wrong, no M received...
+                        logging.warning('Something went wrong, no M received.')
                         break # sends it to the error state
 
-        
-        # it means an error occurred
-        logging.warning('Error detected on state: {}'.format(dataHandler['state']))
-        dataHandler['packet_error'] = 1
+                elif dataHandler['state'] == 2: # direction (should be >)
+                    dataHandler['unsupported'] = 0
+                    if ((data) == 62): # > FC to PC
+                        dataHandler['message_direction'] = 1
+                    elif ((data) == 60): # < PC to FC
+                        dataHandler['message_direction'] = 0
+                    elif ((data) == 33): # !
+                        # FC reports unsupported message error
+                        logging.warning('FC reports unsupported message error.')
+                        dataHandler['unsupported'] = 1
 
-        return dataHandler
+                    dataHandler['state'] = 3
+
+                elif dataHandler['state'] == 3:
+                    dataHandler['message_length_expected'] = (data)
+                    if dataHandler['message_length_expected'] == MSPy.JUMBO_FRAME_SIZE_LIMIT:
+                        logging.debug("JumboFrame received.")
+                        dataHandler['messageIsJumboFrame'] = True
+                        received_bytes += local_read()
+
+                    # start the checksum procedure
+                    dataHandler['message_checksum'] = (data)
+                    dataHandler['state'] = 4
+
+                elif dataHandler['state'] == 4:
+                    dataHandler['code'] = (data)
+                    dataHandler['message_checksum'] ^= (data)
+
+                    if dataHandler['message_length_expected'] > 0:
+                        # process payload
+                        if dataHandler['messageIsJumboFrame']:
+                            dataHandler['state'] = 5
+                            received_bytes += local_read()
+                        else:
+                            dataHandler['state'] = 7
+                    else:
+                        # no payload
+                        dataHandler['state'] = 9
+
+                elif dataHandler['state'] == 5:
+                    # this is a JumboFrame
+                    dataHandler['message_length_expected'] = (data)
+
+                    dataHandler['message_checksum'] ^= (data)
+
+                    dataHandler['state'] = 6
+                    received_bytes += local_read()
+
+                elif dataHandler['state'] == 6:
+                    # calculates the JumboFrame size
+                    dataHandler['message_length_expected'] +=  256 * (data)
+                    logging.debug("JumboFrame message_length_expected: {}".format(dataHandler['message_length_expected']))
+                    # There's no way to check for transmission errors here...
+                    # In the worst scenario, it will try to read 255 + 256*255 = 65535 bytes
+
+                    dataHandler['message_checksum'] ^= (data)
+
+                    dataHandler['state'] = 7
+                    received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
+
+                elif dataHandler['state'] == 7:
+                    # setup buffer according to the message_length_expected
+                    dataHandler['message_buffer'] = bytearray(dataHandler['message_length_expected'])
+                    dataHandler['message_buffer_uint8_view'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
+
+                    # payload
+                    dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = (data)
+                    dataHandler['message_checksum'] ^= (data)
+                    dataHandler['message_length_received'] += 1
+
+                    if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
+                        dataHandler['state'] = 9
+                    else:
+                        dataHandler['state'] = 8
+
+                elif dataHandler['state'] == 8:
+                    # payload
+                    dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = (data)
+                    dataHandler['message_checksum'] ^= (data)
+                    dataHandler['message_length_received'] += 1
+
+                    if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
+                        dataHandler['state'] = 9
+
+                elif dataHandler['state'] == 9:
+                        if dataHandler['message_checksum'] == (data):
+                            # checksum is correct, message received, store dataview
+                            logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
+                            dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
+                            return dataHandler
+                        else:
+                            # wrong checksum
+                            logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
+                                                                                                        (data),
+                                                                                                        dataHandler['message_checksum']))
+                            dataHandler['crcError'] = True
+                            break # sends it to the error state
+
+            
+            # it means an error occurred
+            logging.warning('Error detected on state: {}'.format(dataHandler['state']))
+            dataHandler['packet_error'] = 1
+
+            return dataHandler
 
     @staticmethod
     def readbytes(data, size=8, unsigned=False):
@@ -1149,7 +1154,7 @@ class MSPy:
         """
         buffer = bytearray()
 
-        for i in range(int(size/8)):
+        for _ in range(int(size/8)):
             buffer.append(data.pop(0))
         
         if size==8:
@@ -2198,7 +2203,7 @@ class MSPy:
         return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
 
 
-    def send_RAW_msg(self, code, data=[]):
+    def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
         """Send a RAW MSP message through the serial port
         Based on betaflight-configurator (https://git.io/fjRxz)
 
@@ -2215,6 +2220,8 @@ class MSPy:
         int
             number of bytes of data actually written (including 6 bytes header)
         """
+
+        res = -1
 
         # Always reserve 6 bytes for protocol overhead
         # $ + M + < + data_length + msg_code + data + msg_crc
@@ -2245,6 +2252,14 @@ class MSPy:
             bufView[3] = 0 #data length
             bufView[4] = code #code
             bufView[5] = bufView[3] ^ bufView[4] #checksum
-        
-        logging.debug("RAW message sent: {}".format(bufView))
-        return self.conn.write(bufView)
+
+        if self.serial_port_write_lock.acquire(blocking, timeout):
+            try:
+                res = self.conn.write(bufView)
+            finally:
+                self.serial_port_write_lock.release()
+                if res>0:
+                    logging.debug("RAW message sent: {}".format(bufView))
+
+                return res
+
