@@ -125,10 +125,13 @@ def keyboard_controller(screen):
                 if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                     dataHandler = board.receive_msg()
                     board.process_recv_data(dataHandler)
-
-            min_voltage = board.BATTERY_CONFIG['vbatmincellvoltage']*board.BATTERY_STATE['cellCount']
-            warn_voltage = board.BATTERY_CONFIG['vbatwarningcellvoltage']*board.BATTERY_STATE['cellCount']
-            max_voltage = board.BATTERY_CONFIG['vbatmaxcellvoltage']*board.BATTERY_STATE['cellCount']
+            if 'INAV' not in board.CONFIG['flightControllerIdentifier']:
+                cellCount = board.BATTERY_STATE['cellCount']
+            else:
+                cellCount = 0
+            min_voltage = board.BATTERY_CONFIG['vbatmincellvoltage']*cellCount
+            warn_voltage = board.BATTERY_CONFIG['vbatwarningcellvoltage']*cellCount
+            max_voltage = board.BATTERY_CONFIG['vbatmaxcellvoltage']*cellCount
 
             screen.addstr(15, 0, "apiVersion: {}".format(board.CONFIG['apiVersion']))
             screen.clrtoeol()

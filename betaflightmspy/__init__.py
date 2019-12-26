@@ -1190,7 +1190,7 @@ class MSPy:
             logging.debug("Nothing was received - Code 0")
             return 1
 
-        if (not dataHandler['crcError']):
+        if (not dataHandler['crcError']) and data:
             result = 0
             if (not dataHandler['unsupported']):
                 if code == MSPy.MSPCodes['MSP_STATUS']:
@@ -1209,19 +1209,22 @@ class MSPy:
                     self.CONFIG['profile'] = self.readbytes(data, size=8, unsigned=True)
                     self.CONFIG['cpuload'] = self.readbytes(data, size=16, unsigned=True)
                     
-                    self.CONFIG['numProfiles'] = self.readbytes(data, size=8, unsigned=True)
-                    self.CONFIG['rateProfile'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                        self.CONFIG['numProfiles'] = self.readbytes(data, size=8, unsigned=True)
+                        self.CONFIG['rateProfile'] = self.readbytes(data, size=8, unsigned=True)
 
-                    # Read flight mode flags
-                    byteCount = self.readbytes(data, size=8, unsigned=True)
-                    self.CONFIG['flightModeFlags'] = [] # this was not implemented on betaflight-configurator
-                    for i in range(byteCount):
-                        # betaflight-configurator would just discard these bytes
-                        self.CONFIG['flightModeFlags'].append(self.readbytes(data, size=8, unsigned=True))
+                        # Read flight mode flags
+                        byteCount = self.readbytes(data, size=8, unsigned=True)
+                        self.CONFIG['flightModeFlags'] = [] # this was not implemented on betaflight-configurator
+                        for i in range(byteCount):
+                            # betaflight-configurator would just discard these bytes
+                            self.CONFIG['flightModeFlags'].append(self.readbytes(data, size=8, unsigned=True))
 
-                    # Read arming disable flags
-                    self.CONFIG['armingDisableCount'] = self.readbytes(data, size=8, unsigned=True) # Flag count
-                    self.CONFIG['armingDisableFlags'] = self.readbytes(data, size=32, unsigned=True)
+                        # Read arming disable flags
+                        self.CONFIG['armingDisableCount'] = self.readbytes(data, size=8, unsigned=True) # Flag count
+                        self.CONFIG['armingDisableFlags'] = self.readbytes(data, size=32, unsigned=True)
+                    else:
+                        self.CONFIG['armingDisableFlags'] = self.readbytes(data, size=16, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_RAW_IMU']:
                     # 512 for mpu6050, 256 for mma
@@ -1286,8 +1289,8 @@ class MSPy:
                     self.ANALOG['rssi'] = self.readbytes(data, size=16, unsigned=True) # 0-1023
                     self.ANALOG['amperage'] = self.readbytes(data, size=16, unsigned=False) / 100 # A
                     self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
-
-                    self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                        self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
 
                 elif code == MSPy.MSPCodes['MSP_VOLTAGE_METERS']:
                     total_bytes_per_meter = (8+8)/8 # just to make it clear where it comes from...
@@ -1316,7 +1319,15 @@ class MSPy:
                     self.BATTERY_STATE['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100 # V
 
                 elif code == MSPy.MSPCodes['MSP_VOLTAGE_METER_CONFIG']:
-                        self.VOLTAGE_METER_CONFIGS = []
+                    self.VOLTAGE_METER_CONFIGS = []
+                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                        voltageMeterConfig = {}
+                        voltageMeterConfig['vbatscale'] = self.readbytes(data, size=8, unsigned=True)/10
+                        self.VOLTAGE_METER_CONFIGS.append(voltageMeterConfig)
+                        self.BATTERY_CONFIG['vbatmincellvoltage'] = self.readbytes(data, size=8, unsigned=True)/10
+                        self.BATTERY_CONFIG['vbatmaxcellvoltage'] = self.readbytes(data, size=8, unsigned=True)/10
+                        self.BATTERY_CONFIG['vbatwarningcellvoltage'] = self.readbytes(data, size=8, unsigned=True)/10
+                    else:
                         voltage_meter_count = self.readbytes(data, size=8, unsigned=True)
 
                         for i in range(voltage_meter_count):
@@ -1336,21 +1347,29 @@ class MSPy:
 
                 elif code == MSPy.MSPCodes['MSP_CURRENT_METER_CONFIG']:
                     self.CURRENT_METER_CONFIGS = []
-                    current_meter_count = self.readbytes(data, size=8, unsigned=True)
-                    for i in range(current_meter_count):
+                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
                         currentMeterConfig = {}
-                        subframe_length = self.readbytes(data, size=8, unsigned=True)
+                        currentMeterConfig['scale'] = self.readbytes(data, size=16, unsigned=True)
+                        currentMeterConfig['offset'] = self.readbytes(data, size=16, unsigned=True)
+                        currentMeterConfig['sensorType'] = self.readbytes(data, size=8, unsigned=True)
+                        self.CURRENT_METER_CONFIGS.append(currentMeterConfig)
+                        self.BATTERY_CONFIG['capacity'] = self.readbytes(data, size=16, unsigned=True)
+                    else:
+                        current_meter_count = self.readbytes(data, size=8, unsigned=True)
+                        for i in range(current_meter_count):
+                            currentMeterConfig = {}
+                            subframe_length = self.readbytes(data, size=8, unsigned=True)
 
-                        if (subframe_length != 6):
-                            for j in range(subframe_length):
-                                self.readbytes(data, size=8, unsigned=True)
-                        else:
-                            currentMeterConfig['id'] = self.readbytes(data, size=8, unsigned=True)
-                            currentMeterConfig['sensorType'] = self.readbytes(data, size=8, unsigned=True)
-                            currentMeterConfig['scale'] = self.readbytes(data, size=16, unsigned=False)
-                            currentMeterConfig['offset'] = self.readbytes(data, size=16, unsigned=False)
+                            if (subframe_length != 6):
+                                for j in range(subframe_length):
+                                    self.readbytes(data, size=8, unsigned=True)
+                            else:
+                                currentMeterConfig['id'] = self.readbytes(data, size=8, unsigned=True)
+                                currentMeterConfig['sensorType'] = self.readbytes(data, size=8, unsigned=True)
+                                currentMeterConfig['scale'] = self.readbytes(data, size=16, unsigned=False)
+                                currentMeterConfig['offset'] = self.readbytes(data, size=16, unsigned=False)
 
-                            self.CURRENT_METER_CONFIGS.append(currentMeterConfig)
+                                self.CURRENT_METER_CONFIGS.append(currentMeterConfig)
 
                 elif code == MSPy.MSPCodes['MSP_BATTERY_CONFIG']:
                     self.BATTERY_CONFIG['vbatmincellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
@@ -1381,18 +1400,19 @@ class MSPy:
 
                     self.RC_TUNING['RC_YAW_EXPO'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
 
-                    self.RC_TUNING['rcYawRate'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                        self.RC_TUNING['rcYawRate'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
 
-                    self.RC_TUNING['rcPitchRate'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
-                    self.RC_TUNING['RC_PITCH_EXPO'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
+                        self.RC_TUNING['rcPitchRate'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
+                        self.RC_TUNING['RC_PITCH_EXPO'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
 
-                    self.RC_TUNING['throttleLimitType'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RC_TUNING['throttleLimitPercent'] = self.readbytes(data, size=8, unsigned=True)
+                        self.RC_TUNING['throttleLimitType'] = self.readbytes(data, size=8, unsigned=True)
+                        self.RC_TUNING['throttleLimitPercent'] = self.readbytes(data, size=8, unsigned=True)
 
-                    if int("".join((self.CONFIG['apiVersion'].rsplit('.')))) >= 1420:
-                        self.RC_TUNING['roll_rate_limit'] = self.readbytes(data, size=16, unsigned=True)
-                        self.RC_TUNING['pitch_rate_limit'] = self.readbytes(data, size=16, unsigned=True)
-                        self.RC_TUNING['yaw_rate_limit'] = self.readbytes(data, size=16, unsigned=True)
+                        if int("".join((self.CONFIG['apiVersion'].rsplit('.')))) >= 1420:
+                            self.RC_TUNING['roll_rate_limit'] = self.readbytes(data, size=16, unsigned=True)
+                            self.RC_TUNING['pitch_rate_limit'] = self.readbytes(data, size=16, unsigned=True)
+                            self.RC_TUNING['yaw_rate_limit'] = self.readbytes(data, size=16, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_PID']:
                     self.PIDs = []
@@ -1406,7 +1426,8 @@ class MSPy:
                 elif code == MSPy.MSPCodes['MSP_ARMING_CONFIG']:
                     self.ARMING_CONFIG['auto_disarm_delay'] = self.readbytes(data, size=8, unsigned=True)
                     self.ARMING_CONFIG['disarm_kill_switch'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ARMING_CONFIG['small_angle'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                        self.ARMING_CONFIG['small_angle'] = self.readbytes(data, size=8, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_LOOP_TIME']:
                     self.FC_CONFIG['loopTime'] = self.readbytes(data, size=16, unsigned=True)
@@ -1526,10 +1547,13 @@ class MSPy:
                     self.SENSOR_ALIGNMENT['align_acc'] = self.readbytes(data, size=8, unsigned=True)
                     self.SENSOR_ALIGNMENT['align_mag'] = self.readbytes(data, size=8, unsigned=True)
 
-                    self.SENSOR_ALIGNMENT['gyro_detection_flags'] = self.readbytes(data, size=8, unsigned=True)
-                    self.SENSOR_ALIGNMENT['gyro_to_use'] = self.readbytes(data, size=8, unsigned=True)
-                    self.SENSOR_ALIGNMENT['gyro_1_align'] = self.readbytes(data, size=8, unsigned=True)
-                    self.SENSOR_ALIGNMENT['gyro_2_align'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                        self.SENSOR_ALIGNMENT['align_opflow'] = self.readbytes(data, size=8, unsigned=True)
+                    else:
+                        self.SENSOR_ALIGNMENT['gyro_detection_flags'] = self.readbytes(data, size=8, unsigned=True)
+                        self.SENSOR_ALIGNMENT['gyro_to_use'] = self.readbytes(data, size=8, unsigned=True)
+                        self.SENSOR_ALIGNMENT['gyro_1_align'] = self.readbytes(data, size=8, unsigned=True)
+                        self.SENSOR_ALIGNMENT['gyro_2_align'] = self.readbytes(data, size=8, unsigned=True)
 
                 # elif code == MSPy.MSPCodes['MSP_DISPLAYPORT']:
         
@@ -1605,10 +1629,10 @@ class MSPy:
                         numCh = self.readbytes(data, size=8, unsigned=True)
 
                         for i in range(numCh):
-                            self.GPS_DATA['chn'][i] = self.readbytes(data, size=8, unsigned=True)
-                            self.GPS_DATA['svid'][i] = self.readbytes(data, size=8, unsigned=True)
-                            self.GPS_DATA['quality'][i] = self.readbytes(data, size=8, unsigned=True)
-                            self.GPS_DATA['cno'][i] = self.readbytes(data, size=8, unsigned=True)
+                            self.GPS_DATA['chn'].append(self.readbytes(data, size=8, unsigned=True))
+                            self.GPS_DATA['svid'].append(self.readbytes(data, size=8, unsigned=True))
+                            self.GPS_DATA['quality'].append(self.readbytes(data, size=8, unsigned=True))
+                            self.GPS_DATA['cno'].append(self.readbytes(data, size=8, unsigned=True))
 
                 elif code == MSPy.MSPCodes['MSP_RX_MAP']:
                     self.RC_MAP = [] # empty the array as new data is coming in
@@ -1621,8 +1645,8 @@ class MSPy:
                     
                 elif code == MSPy.MSPCodes['MSP_MIXER_CONFIG']:
                     self.MIXER_CONFIG['mixer'] = self.readbytes(data, size=8, unsigned=True)
-                    
-                    self.MIXER_CONFIG['reverseMotorDir'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:                    
+                        self.MIXER_CONFIG['reverseMotorDir'] = self.readbytes(data, size=8, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_FEATURE_CONFIG']:
                     self.FEATURE_CONFIG['featuremask']  = self.readbytes(data, size=32, unsigned=True)
@@ -1705,19 +1729,22 @@ class MSPy:
                     self.CONFIG['boardName'] = ""
                     self.CONFIG['manufacturerId'] = ""
                     self.CONFIG['signature'] = []
+                    self.CONFIG['boardName'] = ""
+                    self.CONFIG['mcuTypeId'] = ""
 
-                    length = self.readbytes(data, size=8, unsigned=True)
-                    for i in range(length):
-                        self.CONFIG['boardName'] += chr(self.readbytes(data, size=8, unsigned=True))
+                    if data:
+                        length = self.readbytes(data, size=8, unsigned=True)
+                        for i in range(length):
+                            self.CONFIG['boardName'] += chr(self.readbytes(data, size=8, unsigned=True))
 
-                    length = self.readbytes(data, size=8, unsigned=True)
-                    for i in range(length):
-                        self.CONFIG['manufacturerId'] += chr(self.readbytes(data, size=8, unsigned=True))
+                        length = self.readbytes(data, size=8, unsigned=True)
+                        for i in range(length):
+                            self.CONFIG['manufacturerId'] += chr(self.readbytes(data, size=8, unsigned=True))
 
-                    for i in range(MSPy.SIGNATURE_LENGTH):
-                        self.CONFIG['signature'].append(self.readbytes(data, size=8, unsigned=True))
+                        for i in range(MSPy.SIGNATURE_LENGTH):
+                            self.CONFIG['signature'].append(self.readbytes(data, size=8, unsigned=True))
 
-                    self.CONFIG['mcuTypeId'] = self.readbytes(data, size=8, unsigned=True)
+                        self.CONFIG['mcuTypeId'] = self.readbytes(data, size=8, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_NAME']:
                     self.CONFIG['name'] = ''
@@ -1798,26 +1825,34 @@ class MSPy:
 
                 elif code == MSPy.MSPCodes['MSP_RX_CONFIG']:
                     self.RX_CONFIG['serialrx_provider'] = self.readbytes(data, size=8, unsigned=True)
+                    # maxcheck for INAV
                     self.RX_CONFIG['stick_max'] = self.readbytes(data, size=16, unsigned=True)
+                    # midrc for INAV
                     self.RX_CONFIG['stick_center'] = self.readbytes(data, size=16, unsigned=True)
+                    # mincheck for INAV
                     self.RX_CONFIG['stick_min'] = self.readbytes(data, size=16, unsigned=True)
                     self.RX_CONFIG['spektrum_sat_bind'] = self.readbytes(data, size=8, unsigned=True)
                     self.RX_CONFIG['rx_min_usec'] = self.readbytes(data, size=16, unsigned=True)
                     self.RX_CONFIG['rx_max_usec'] = self.readbytes(data, size=16, unsigned=True)
                     self.RX_CONFIG['rcInterpolation'] = self.readbytes(data, size=8, unsigned=True)
                     self.RX_CONFIG['rcInterpolationInterval'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RX_CONFIG['airModeActivateThreshold'] = self.readbytes(data, size=16, unsigned=True)
+                    self.RX_CONFIG['airModeActivateThreshold'] = self.readbytes(data, size=16, unsigned=True)  
+                    # spirx_protocol for INAV
                     self.RX_CONFIG['rxSpiProtocol'] = self.readbytes(data, size=8, unsigned=True)
+                    # spirx_id for INAV
                     self.RX_CONFIG['rxSpiId'] = self.readbytes(data, size=32, unsigned=True)
+                    # spirx_channel_count for INAV
                     self.RX_CONFIG['rxSpiRfChannelCount'] = self.readbytes(data, size=8, unsigned=True)
                     self.RX_CONFIG['fpvCamAngleDegrees'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RX_CONFIG['rcInterpolationChannels'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RX_CONFIG['rcSmoothingType'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RX_CONFIG['rcSmoothingInputCutoff'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RX_CONFIG['rcSmoothingDerivativeCutoff'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RX_CONFIG['rcSmoothingInputType'] = self.readbytes(data, size=8, unsigned=True)
-                    self.RX_CONFIG['rcSmoothingDerivativeType'] = self.readbytes(data, size=8, unsigned=True)
-
+                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                        self.RX_CONFIG['receiver_type'] = self.readbytes(data, size=8, unsigned=True)
+                    else:
+                        self.RX_CONFIG['rcInterpolationChannels'] = self.readbytes(data, size=8, unsigned=True)
+                        self.RX_CONFIG['rcSmoothingType'] = self.readbytes(data, size=8, unsigned=True)
+                        self.RX_CONFIG['rcSmoothingInputCutoff'] = self.readbytes(data, size=8, unsigned=True)
+                        self.RX_CONFIG['rcSmoothingDerivativeCutoff'] = self.readbytes(data, size=8, unsigned=True)
+                        self.RX_CONFIG['rcSmoothingInputType'] = self.readbytes(data, size=8, unsigned=True)
+                        self.RX_CONFIG['rcSmoothingDerivativeType'] = self.readbytes(data, size=8, unsigned=True)
                 elif code == MSPy.MSPCodes['MSP_FAILSAFE_CONFIG']:
                     self.FAILSAFE_CONFIG['failsafe_delay'] = self.readbytes(data, size=8, unsigned=True)
                     self.FAILSAFE_CONFIG['failsafe_off_delay'] = self.readbytes(data, size=8, unsigned=True)
@@ -1859,25 +1894,30 @@ class MSPy:
                     self.FILTER_CONFIG['gyro_notch2_hz'] = self.readbytes(data, size=16, unsigned=True)
                     self.FILTER_CONFIG['gyro_notch2_cutoff'] = self.readbytes(data, size=16, unsigned=True)
 
-                    self.FILTER_CONFIG['dterm_lowpass_type'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                        self.FILTER_CONFIG['dterm_lowpass_type'] = self.readbytes(data, size=8, unsigned=True)
 
-                    self.FILTER_CONFIG['gyro_hardware_lpf'] = self.readbytes(data, size=8, unsigned=True)
-                    
-                    self.readbytes(data, size=8, unsigned=True) # must consume this byte
+                        self.FILTER_CONFIG['gyro_hardware_lpf'] = self.readbytes(data, size=8, unsigned=True)
+                        
+                        self.readbytes(data, size=8, unsigned=True) # must consume this byte
 
-                    self.FILTER_CONFIG['gyro_lowpass_hz'] = self.readbytes(data, size=16, unsigned=True)
-                    self.FILTER_CONFIG['gyro_lowpass2_hz'] = self.readbytes(data, size=16, unsigned=True)
-                    self.FILTER_CONFIG['gyro_lowpass_type'] = self.readbytes(data, size=8, unsigned=True)
-                    self.FILTER_CONFIG['gyro_lowpass2_type'] = self.readbytes(data, size=8, unsigned=True)
-                    self.FILTER_CONFIG['dterm_lowpass2_hz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['gyro_lowpass_hz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['gyro_lowpass2_hz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['gyro_lowpass_type'] = self.readbytes(data, size=8, unsigned=True)
+                        self.FILTER_CONFIG['gyro_lowpass2_type'] = self.readbytes(data, size=8, unsigned=True)
+                        self.FILTER_CONFIG['dterm_lowpass2_hz'] = self.readbytes(data, size=16, unsigned=True)
 
-                    self.FILTER_CONFIG['gyro_32khz_hardware_lpf'] = 0
+                        self.FILTER_CONFIG['gyro_32khz_hardware_lpf'] = 0
 
-                    self.FILTER_CONFIG['dterm_lowpass2_type'] = self.readbytes(data, size=8, unsigned=True)
-                    self.FILTER_CONFIG['gyro_lowpass_dyn_min_hz'] = self.readbytes(data, size=16, unsigned=True)
-                    self.FILTER_CONFIG['gyro_lowpass_dyn_max_hz'] = self.readbytes(data, size=16, unsigned=True)
-                    self.FILTER_CONFIG['dterm_lowpass_dyn_min_hz'] = self.readbytes(data, size=16, unsigned=True)
-                    self.FILTER_CONFIG['dterm_lowpass_dyn_max_hz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['dterm_lowpass2_type'] = self.readbytes(data, size=8, unsigned=True)
+                        self.FILTER_CONFIG['gyro_lowpass_dyn_min_hz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['gyro_lowpass_dyn_max_hz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['dterm_lowpass_dyn_min_hz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['dterm_lowpass_dyn_max_hz'] = self.readbytes(data, size=16, unsigned=True)
+                    else:
+                        self.FILTER_CONFIG['accNotchHz'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['accNotchCutoff'] = self.readbytes(data, size=16, unsigned=True)
+                        self.FILTER_CONFIG['gyroStage2LowpassHz'] = self.readbytes(data, size=16, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_SET_PID_ADVANCED']:
                     logging.info("Advanced PID settings saved")
@@ -1888,43 +1928,50 @@ class MSPy:
                     self.ADVANCED_TUNING['yaw_p_limit'] = self.readbytes(data, size=16, unsigned=True)
                     self.ADVANCED_TUNING['deltaMethod'] = self.readbytes(data, size=8, unsigned=True)
                     self.ADVANCED_TUNING['vbatPidCompensation'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                        self.ADVANCED_TUNING['feedforwardTransition'] = self.readbytes(data, size=8, unsigned=True)
 
-                    self.ADVANCED_TUNING['feedforwardTransition'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['dtermSetpointWeight'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['toleranceBand'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['toleranceBandReduction'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['itermThrottleGain'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['pidMaxVelocity'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['pidMaxVelocityYaw'] = self.readbytes(data, size=16, unsigned=True)
 
-                    self.ADVANCED_TUNING['dtermSetpointWeight'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['toleranceBand'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['toleranceBandReduction'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['itermThrottleGain'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['pidMaxVelocity'] = self.readbytes(data, size=16, unsigned=True)
-                    self.ADVANCED_TUNING['pidMaxVelocityYaw'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['levelAngleLimit'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['levelSensitivity'] = self.readbytes(data, size=8, unsigned=True)
 
-                    self.ADVANCED_TUNING['levelAngleLimit'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['levelSensitivity'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['itermThrottleThreshold'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['itermAcceleratorGain'] = self.readbytes(data, size=16, unsigned=True)
 
-                    self.ADVANCED_TUNING['itermThrottleThreshold'] = self.readbytes(data, size=16, unsigned=True)
-                    self.ADVANCED_TUNING['itermAcceleratorGain'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['dtermSetpointWeight'] = self.readbytes(data, size=16, unsigned=True)
 
-                    self.ADVANCED_TUNING['dtermSetpointWeight'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['itermRotation'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['smartFeedforward'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['itermRelax'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['itermRelaxType'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['absoluteControlGain'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['throttleBoost'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['acroTrainerAngleLimit'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['feedforwardRoll']  = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['feedforwardPitch'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['feedforwardYaw']   = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['antiGravityMode']  = self.readbytes(data, size=8, unsigned=True)
 
-                    self.ADVANCED_TUNING['itermRotation'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['smartFeedforward'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['itermRelax'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['itermRelaxType'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['absoluteControlGain'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['throttleBoost'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['acroTrainerAngleLimit'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['feedforwardRoll']  = self.readbytes(data, size=16, unsigned=True)
-                    self.ADVANCED_TUNING['feedforwardPitch'] = self.readbytes(data, size=16, unsigned=True)
-                    self.ADVANCED_TUNING['feedforwardYaw']   = self.readbytes(data, size=16, unsigned=True)
-                    self.ADVANCED_TUNING['antiGravityMode']  = self.readbytes(data, size=8, unsigned=True)
-
-                    self.ADVANCED_TUNING['dMinRoll'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['dMinPitch'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['dMinYaw'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['dMinGain'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['dMinAdvance'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['useIntegratedYaw'] = self.readbytes(data, size=8, unsigned=True)
-                    self.ADVANCED_TUNING['integratedYawRelax'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['dMinRoll'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['dMinPitch'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['dMinYaw'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['dMinGain'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['dMinAdvance'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['useIntegratedYaw'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['integratedYawRelax'] = self.readbytes(data, size=8, unsigned=True)
+                    else:
+                        self.ADVANCED_TUNING['setpointRelaxRatio'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['dtermSetpointWeight'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['pidSumLimit'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['itermThrottleGain'] = self.readbytes(data, size=8, unsigned=True)
+                        self.ADVANCED_TUNING['axisAccelerationLimitRollPitch'] = self.readbytes(data, size=16, unsigned=True)
+                        self.ADVANCED_TUNING['axisAccelerationLimitYaw'] = self.readbytes(data, size=16, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_SENSOR_CONFIG']:
                     self.SENSOR_CONFIG['acc_hardware'] = self.readbytes(data, size=8, unsigned=True)
@@ -1953,13 +2000,15 @@ class MSPy:
                     self.SDCARD['totalSizeKB'] = self.readbytes(data, size=32, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_BLACKBOX_CONFIG']:
-                    self.BLACKBOX['supported'] = (self.readbytes(data, size=8, unsigned=True) & 1) != 0
-                    self.BLACKBOX['blackboxDevice'] = self.readbytes(data, size=8, unsigned=True)
-                    self.BLACKBOX['blackboxRateNum'] = self.readbytes(data, size=8, unsigned=True)
-                    self.BLACKBOX['blackboxRateDenom'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                        self.BLACKBOX['supported'] = (self.readbytes(data, size=8, unsigned=True) & 1) != 0
+                        self.BLACKBOX['blackboxDevice'] = self.readbytes(data, size=8, unsigned=True)
+                        self.BLACKBOX['blackboxRateNum'] = self.readbytes(data, size=8, unsigned=True)
+                        self.BLACKBOX['blackboxRateDenom'] = self.readbytes(data, size=8, unsigned=True)
 
-                    self.BLACKBOX['blackboxPDenom'] = self.readbytes(data, size=16, unsigned=True)
-                
+                        self.BLACKBOX['blackboxPDenom'] = self.readbytes(data, size=16, unsigned=True)
+                    else:
+                        pass # API no longer supported (INAV 2.3.0)
                 elif code == MSPy.MSPCodes['MSP_SET_BLACKBOX_CONFIG']:
                     logging.info("Blackbox config saved")
 
