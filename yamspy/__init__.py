@@ -843,6 +843,7 @@ class MSPy:
         self.serial_port_write_lock = Lock()
         self.serial_port_read_lock = Lock()
 
+
     def __enter__(self):
         self.is_serial_open = not self.connect(trials=self.ser_trials)
 
@@ -852,9 +853,11 @@ class MSPy:
             logging.warning("Serial port ({}) not ready/available".format(self.conn.port))
             return 1
 
+
     def __exit__(self, exc_type, exc_value, traceback):
         if not self.conn.closed:
             self.conn.close()
+
 
     def connect(self, trials=100, delay=0.5):
         """Opens the serial connection with the board
@@ -1034,7 +1037,6 @@ class MSPy:
                 return msg_header + msg
 
 
-
     def receive_msg(self):
         """Receive an MSP message from the serial port
         Based on betaflight-configurator (https://git.io/fjRAz)
@@ -1178,6 +1180,7 @@ class MSPy:
 
             return dataHandler
 
+
     @staticmethod
     def readbytes(data, size=8, unsigned=False):
         """Unpack bytes according to size / type
@@ -1212,6 +1215,187 @@ class MSPy:
             unpack_format = unpack_format.upper()
 
         return struct.unpack('<' + unpack_format, buffer)[0]
+
+
+    def process_armingDisableFlags(self, flags):
+        result = []
+        while (flags):
+            bitpos = libc.ffs(flags) - 1
+            flags &= ~(1 << bitpos)
+            result.append(self.armingDisableFlagNames[bitpos])
+        return result
+
+
+    def process_mode(self, flag):
+        """Translate the value from CONFIG['mode']
+        """
+        result = []
+        for i in range(len(self.AUX_CONFIG)):
+            if (self.bit_check(flag, i)):
+                result.append(self.AUX_CONFIG[i])
+
+        return result
+
+
+    @staticmethod
+    def bit_check(mask, bit):
+        return ((mask>>bit)%2) != 0
+
+
+    def serialPortFunctionMaskToFunctions(self, functionMask):
+        functions = []
+
+        keys = self.SERIAL_PORT_FUNCTIONS.keys()
+        for key in keys:
+            bit = self.SERIAL_PORT_FUNCTIONS[key]
+            if (self.bit_check(functionMask, bit)):
+                functions.append(key)
+        return functions
+
+
+    @staticmethod
+    def convert(val_list, n=16): 
+        """Convert to n*bits (8 multiple) list
+
+        Parameters
+        ----------
+        val_list : list
+            List with values to be converted
+        
+        n: int, optional
+            Number of bits (multiple of 8) (default is 16)
+            
+        Returns
+        -------
+        list
+            List where each item is the equivalent byte value
+        """ 
+        buffer = []
+        for val in val_list:
+            for i in range(int(n/8)): 
+                buffer.append((int(val)>>i*8) & 255) 
+        return buffer 
+
+    def save2eprom(self):
+        logging.info("Save to EPROM requested") # some configs also need reboot to be applied (not online).
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_EEPROM_WRITE'], data=[])
+
+
+    def reboot(self):
+        logging.info("Reboot requested")
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_REBOOT'], data=[])
+
+
+    def set_ARMING_DISABLE(self, armingDisabled=0, runawayTakeoffPreventionDisabled=0):
+        """Disable Arming or runaway takeoff prevention
+        
+        runawayTakeoffPreventionDisabled will be ignored if armingDisabled is true
+        https://github.com/betaflight/betaflight/wiki/Runaway-Takeoff-Prevention
+        """
+        data = bytearray([armingDisabled, runawayTakeoffPreventionDisabled])
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_ARMING_DISABLE'], data)
+
+
+    def set_RX_MAP(self, new_rc_map):
+        assert(type(new_rc_map)==list)
+        assert(len(new_rc_map)==8)
+
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RX_MAP'], new_rc_map)
+
+
+    def set_FEATURE_CONFIG(self, mask):
+        assert(type(mask)==int)
+
+        data = self.convert([mask], 32)
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_FEATURE_CONFIG'], data)
+
+
+    def send_RAW_MOTORS(self, data=[]):
+        assert(type(data)==list)
+        assert(len(data)==8)
+
+        data = self.convert(data, 16) # any values bigger than 255 need to be converted.
+                                      # RC and Motor commands go from 0 to 2000.
+
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_MOTOR'], data)
+
+
+    def send_RAW_RC(self, data=[]):
+        """
+        When using RX_SERIAL:
+        [roll, pitch, yaw, throttle, aux1, aux2,...,aux10]
+
+        When using RX_MSP:
+        [roll, pitch, yaw, throttle, aux1, aux2,...,aux14]
+
+        Considering RC_MAP==[0, 1, 3, 2, 4, 5, 6, 7]
+        """
+        data = self.convert(data, 16) # any values bigger than 255 need to be converted.
+                                      # RC and Motor commands go from 0 to 2000.
+
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
+
+
+    def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
+        """Send a RAW MSP message through the serial port
+        Based on betaflight-configurator (https://git.io/fjRxz)
+
+        Parameters
+        ----------
+        code : int
+            MSP Code
+        
+        data: list or bytearray, optional
+            Data to be sent (default is [])
+            
+        Returns
+        -------
+        int
+            number of bytes of data actually written (including 6 bytes header)
+        """
+
+        res = -1
+
+        # Always reserve 6 bytes for protocol overhead
+        # $ + M + < + data_length + msg_code + data + msg_crc
+        if (data):
+            size = len(data) + 6
+            checksum = 0
+
+            bufView = bytearray([0]*size)
+
+            bufView[0] = 36 #$
+            bufView[1] = 77 #M
+            bufView[2] = 60 #<
+            bufView[3] = len(data)
+            bufView[4] = code
+
+            checksum = bufView[3] ^ bufView[4]
+
+            for i in range(len(data)):
+                bufView[i + 5] = data[i]
+                checksum ^= bufView[i + 5]
+
+            bufView[5 + len(data)] = checksum
+        else:
+            bufView = bytearray([0]*6)
+            bufView[0] = 36 #$
+            bufView[1] = 77 #M
+            bufView[2] = 60 #<
+            bufView[3] = 0 #data length
+            bufView[4] = code #code
+            bufView[5] = bufView[3] ^ bufView[4] #checksum
+
+        if self.serial_port_write_lock.acquire(blocking, timeout):
+            try:
+                res = self.conn.write(bufView)
+            finally:
+                self.serial_port_write_lock.release()
+                if res>0:
+                    logging.debug("RAW message sent: {}".format(bufView))
+
+                return res
+
 
     def process_recv_data(self, dataHandler):
         """Process the dataHandler from receive_msg consuming (pop!) dataHandler['dataView'] as it goes.
@@ -2186,179 +2370,3 @@ class MSPy:
             result = 1
         
         return result
-
-    def process_armingDisableFlags(self, flags):
-        result = []
-        while (flags):
-            bitpos = libc.ffs(flags) - 1
-            flags &= ~(1 << bitpos)
-            result.append(self.armingDisableFlagNames[bitpos])
-        return result
-
-    def process_mode(self, flag):
-        """Translate the value from CONFIG['mode']
-        """
-        result = []
-        for i in range(len(self.AUX_CONFIG)):
-            if (self.bit_check(flag, i)):
-                result.append(self.AUX_CONFIG[i])
-
-        return result
-
-
-    @staticmethod
-    def bit_check(mask, bit):
-        return ((mask>>bit)%2) != 0
-
-    def serialPortFunctionMaskToFunctions(self, functionMask):
-        functions = []
-
-        keys = self.SERIAL_PORT_FUNCTIONS.keys()
-        for key in keys:
-            bit = self.SERIAL_PORT_FUNCTIONS[key]
-            if (self.bit_check(functionMask, bit)):
-                functions.append(key)
-        return functions
-
-
-    @staticmethod
-    def convert(val_list, n=16): 
-        """Convert to n*bits (8 multiple) list
-
-        Parameters
-        ----------
-        val_list : list
-            List with values to be converted
-        
-        n: int, optional
-            Number of bits (multiple of 8) (default is 16)
-            
-        Returns
-        -------
-        list
-            List where each item is the equivalent byte value
-        """ 
-        buffer = []
-        for val in val_list:
-            for i in range(int(n/8)): 
-                buffer.append((int(val)>>i*8) & 255) 
-        return buffer 
-
-    def save2eprom(self):
-        logging.info("Save to EPROM requested") # some configs also need reboot to be applied (not online).
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_EEPROM_WRITE'], data=[])
-
-    def reboot(self):
-        logging.info("Reboot requested")
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_REBOOT'], data=[])
-
-    def set_ARMING_DISABLE(self, armingDisabled=0, runawayTakeoffPreventionDisabled=0):
-        """Disable Arming or runaway takeoff prevention
-        
-        runawayTakeoffPreventionDisabled will be ignored if armingDisabled is true
-        https://github.com/betaflight/betaflight/wiki/Runaway-Takeoff-Prevention
-        """
-        data = bytearray([armingDisabled, runawayTakeoffPreventionDisabled])
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_ARMING_DISABLE'], data)
-
-
-    def set_RX_MAP(self, new_rc_map):
-        assert(type(new_rc_map)==list)
-        assert(len(new_rc_map)==8)
-
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RX_MAP'], new_rc_map)
-
-
-    def set_FEATURE_CONFIG(self, mask):
-        assert(type(mask)==int)
-
-        data = self.convert([mask], 32)
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_FEATURE_CONFIG'], data)
-
-
-    def send_RAW_MOTORS(self, data=[]):
-        assert(type(data)==list)
-        assert(len(data)==8)
-
-        data = self.convert(data, 16) # any values bigger than 255 need to be converted.
-                                      # RC and Motor commands go from 0 to 2000.
-
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_MOTOR'], data)
-
-
-    def send_RAW_RC(self, data=[]):
-        """
-        When using RX_SERIAL:
-        [roll, pitch, yaw, throttle, aux1, aux2,...,aux10]
-
-        When using RX_MSP:
-        [roll, pitch, yaw, throttle, aux1, aux2,...,aux14]
-
-        Considering RC_MAP==[0, 1, 3, 2, 4, 5, 6, 7]
-        """
-        data = self.convert(data, 16) # any values bigger than 255 need to be converted.
-                                      # RC and Motor commands go from 0 to 2000.
-
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
-
-
-    def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
-        """Send a RAW MSP message through the serial port
-        Based on betaflight-configurator (https://git.io/fjRxz)
-
-        Parameters
-        ----------
-        code : int
-            MSP Code
-        
-        data: list or bytearray, optional
-            Data to be sent (default is [])
-            
-        Returns
-        -------
-        int
-            number of bytes of data actually written (including 6 bytes header)
-        """
-
-        res = -1
-
-        # Always reserve 6 bytes for protocol overhead
-        # $ + M + < + data_length + msg_code + data + msg_crc
-        if (data):
-            size = len(data) + 6
-            checksum = 0
-
-            bufView = bytearray([0]*size)
-
-            bufView[0] = 36 #$
-            bufView[1] = 77 #M
-            bufView[2] = 60 #<
-            bufView[3] = len(data)
-            bufView[4] = code
-
-            checksum = bufView[3] ^ bufView[4]
-
-            for i in range(len(data)):
-                bufView[i + 5] = data[i]
-                checksum ^= bufView[i + 5]
-
-            bufView[5 + len(data)] = checksum
-        else:
-            bufView = bytearray([0]*6)
-            bufView[0] = 36 #$
-            bufView[1] = 77 #M
-            bufView[2] = 60 #<
-            bufView[3] = 0 #data length
-            bufView[4] = code #code
-            bufView[5] = bufView[3] ^ bufView[4] #checksum
-
-        if self.serial_port_write_lock.acquire(blocking, timeout):
-            try:
-                res = self.conn.write(bufView)
-            finally:
-                self.serial_port_write_lock.release()
-                if res>0:
-                    logging.debug("RAW message sent: {}".format(bufView))
-
-                return res
-
