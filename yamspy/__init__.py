@@ -218,7 +218,67 @@ class MSPy:
 
         'MSP_EEPROM_WRITE':               250,
         'MSP_DEBUGMSG':                   253, # Not used
-        'MSP_DEBUG':                      254
+        'MSP_DEBUG':                      254,
+
+        # INAV specific codes
+        'MSPV2_SETTING':                      0x1003,
+        'MSPV2_SET_SETTING':                  0x1004,
+
+        'MSP2_COMMON_MOTOR_MIXER':            0x1005,
+        'MSP2_COMMON_SET_MOTOR_MIXER':        0x1006,
+
+        'MSP2_COMMON_SETTING_INFO':           0x1007,
+        'MSP2_COMMON_PG_LIST':                0x1008,
+
+        'MSP2_CF_SERIAL_CONFIG':              0x1009,
+        'MSP2_SET_CF_SERIAL_CONFIG':          0x100A,
+
+        'MSPV2_INAV_STATUS':                  0x2000,
+        'MSPV2_INAV_OPTICAL_FLOW':            0x2001,
+        'MSPV2_INAV_ANALOG':                  0x2002,
+        'MSPV2_INAV_MISC':                    0x2003,
+        'MSPV2_INAV_SET_MISC':                0x2004,
+        'MSPV2_INAV_BATTERY_CONFIG':          0x2005,
+        'MSPV2_INAV_SET_BATTERY_CONFIG':      0x2006,
+        'MSPV2_INAV_RATE_PROFILE':            0x2007,
+        'MSPV2_INAV_SET_RATE_PROFILE':        0x2008,
+        'MSPV2_INAV_AIR_SPEED':               0x2009,
+        'MSPV2_INAV_OUTPUT_MAPPING':          0x200A,
+
+        'MSP2_INAV_MIXER':                    0x2010,
+        'MSP2_INAV_SET_MIXER':                0x2011,
+
+        'MSP2_INAV_OSD_LAYOUTS':              0x2012,
+        'MSP2_INAV_OSD_SET_LAYOUT_ITEM':      0x2013,
+        'MSP2_INAV_OSD_ALARMS':               0x2014,
+        'MSP2_INAV_OSD_SET_ALARMS':           0x2015,
+        'MSP2_INAV_OSD_PREFERENCES':          0x2016,
+        'MSP2_INAV_OSD_SET_PREFERENCES':      0x2017,
+
+        'MSP2_INAV_MC_BRAKING':               0x200B,
+        'MSP2_INAV_SET_MC_BRAKING':           0x200C,
+
+        'MSP2_INAV_SELECT_BATTERY_PROFILE':   0x2018,
+
+        'MSP2_INAV_DEBUG':                    0x2019,
+
+        'MSP2_BLACKBOX_CONFIG':               0x201A,
+        'MSP2_SET_BLACKBOX_CONFIG':           0x201B,
+
+        'MSP2_INAV_TEMP_SENSOR_CONFIG':       0x201C,
+        'MSP2_INAV_SET_TEMP_SENSOR_CONFIG':   0x201D,
+        'MSP2_INAV_TEMPERATURES':             0x201E,
+
+        'MSP2_INAV_SERVO_MIXER':              0x2020,
+        'MSP2_INAV_SET_SERVO_MIXER':          0x2021,
+        'MSP2_INAV_LOGIC_CONDITIONS':         0x2022,
+        'MSP2_INAV_SET_LOGIC_CONDITIONS':     0x2023,
+        'MSP2_INAV_LOGIC_CONDITIONS_STATUS':  0x2026,
+
+        'MSP2_PID':                           0x2030,
+        'MSP2_SET_PID':                       0x2031,
+
+        'MSP2_INAV_OPFLOW_CALIBRATION':       0x2032
     }
 
     SIGNATURE_LENGTH = 32
@@ -816,7 +876,7 @@ class MSPy:
         for _ in range(trials):
             try:
                 self.conn.open()
-                self.get_basic_info()                
+                self.get_basic_info()
                 return 0
                 
             except serial.SerialException as err:
@@ -829,19 +889,32 @@ class MSPy:
         
         return 1
 
+
     def get_basic_info(self):
         """Basic info about the flight controller to distinguish between the many flavours.
         """
-        for msg in ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 
-                    'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM',
-                    'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']:
+        for msg in ['MSP_API_VERSION', 'MSP_FC_VARIANT']:
             if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                 dataHandler = self.receive_msg()
                 self.process_recv_data(dataHandler)
-        print(self.CONFIG)
+
+        if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+            self.INAV = True
+        else:
+            self.INAV = False
+
+        for msg in ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 
+                    'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 
+                    'MSP_STATUS_EX']:
+            if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+                dataHandler = self.receive_msg()
+                self.process_recv_data(dataHandler)
     
+        print(self.CONFIG)
+
+
     def fast_read_imu(self):
-        """Request, read and process the IMU
+        """Request, read and process RAW IMU
         """
 
         # Request IMU values
@@ -853,25 +926,27 @@ class MSPy:
             msg = self.receive_raw_msg(size = (6+data_length))[5:]
             converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
 
-            # 512 for mpu6050, 256 for mma
+            # /512 for mpu6050, /256 for mma
             # currently we are unable to differentiate between the sensor types, so we are going with 512
-            self.SENSOR_DATA['accelerometer'][0] = converted_msg[0] / 512
-            self.SENSOR_DATA['accelerometer'][1] = converted_msg[1] / 512
-            self.SENSOR_DATA['accelerometer'][2] = converted_msg[2] / 512
+            # And what about SENSOR_CONFIG???
+            self.SENSOR_DATA['accelerometer'][0] = converted_msg[0]
+            self.SENSOR_DATA['accelerometer'][1] = converted_msg[1]
+            self.SENSOR_DATA['accelerometer'][2] = converted_msg[2]
 
-            # properly scaled
-            self.SENSOR_DATA['gyroscope'][0] = converted_msg[3] * (4 / 16.4)
-            self.SENSOR_DATA['gyroscope'][1] = converted_msg[4] * (4 / 16.4)
-            self.SENSOR_DATA['gyroscope'][2] = converted_msg[5] * (4 / 16.4)
+            # properly scaled (INAV and BF use the same * (4 / 16.4))
+            # but this is supposed to be RAW, so raw it is!
+            self.SENSOR_DATA['gyroscope'][0] = converted_msg[3]
+            self.SENSOR_DATA['gyroscope'][1] = converted_msg[4]
+            self.SENSOR_DATA['gyroscope'][2] = converted_msg[5]
 
-            # no clue about scaling factor
-            self.SENSOR_DATA['magnetometer'][0] = converted_msg[6] / 1090
-            self.SENSOR_DATA['magnetometer'][1] = converted_msg[7] / 1090
-            self.SENSOR_DATA['magnetometer'][2] = converted_msg[8] / 1090
+            # no clue about scaling factor (/1090), so raw
+            self.SENSOR_DATA['magnetometer'][0] = converted_msg[6]
+            self.SENSOR_DATA['magnetometer'][1] = converted_msg[7]
+            self.SENSOR_DATA['magnetometer'][2] = converted_msg[8]
 
 
     def fast_read_attitude(self):
-        """Request, read and process the ATTITUDE
+        """Request, read and process the ATTITUDE (Roll, Pitch and Yaw in degrees)
         """
 
         # Request ATTITUDE values
@@ -1178,7 +1253,7 @@ class MSPy:
                     self.CONFIG['profile'] = self.readbytes(data, size=8, unsigned=True)
                     self.CONFIG['cpuload'] = self.readbytes(data, size=16, unsigned=True)
                     
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                    if not self.INAV:
                         self.CONFIG['numProfiles'] = self.readbytes(data, size=8, unsigned=True)
                         self.CONFIG['rateProfile'] = self.readbytes(data, size=8, unsigned=True)
 
@@ -1196,21 +1271,23 @@ class MSPy:
                         self.CONFIG['armingDisableFlags'] = self.readbytes(data, size=16, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_RAW_IMU']:
-                    # 512 for mpu6050, 256 for mma
+                    # /512 for mpu6050, /256 for mma
                     # currently we are unable to differentiate between the sensor types, so we are going with 512
-                    self.SENSOR_DATA['accelerometer'][0] = self.readbytes(data, size=16, unsigned=False) / 512
-                    self.SENSOR_DATA['accelerometer'][1] = self.readbytes(data, size=16, unsigned=False) / 512
-                    self.SENSOR_DATA['accelerometer'][2] = self.readbytes(data, size=16, unsigned=False) / 512
+                    # And what about SENSOR_CONFIG???
+                    self.SENSOR_DATA['accelerometer'][0] = self.readbytes(data, size=16, unsigned=False)
+                    self.SENSOR_DATA['accelerometer'][1] = self.readbytes(data, size=16, unsigned=False)
+                    self.SENSOR_DATA['accelerometer'][2] = self.readbytes(data, size=16, unsigned=False)
 
-                    # properly scaled
-                    self.SENSOR_DATA['gyroscope'][0] = self.readbytes(data, size=16, unsigned=False) * (4 / 16.4)
-                    self.SENSOR_DATA['gyroscope'][1] = self.readbytes(data, size=16, unsigned=False) * (4 / 16.4)
-                    self.SENSOR_DATA['gyroscope'][2] = self.readbytes(data, size=16, unsigned=False) * (4 / 16.4)
+                    # properly scaled (INAV and BF use the same * (4 / 16.4))
+                    # but this is supposed to be RAW, so raw it is!
+                    self.SENSOR_DATA['gyroscope'][0] = self.readbytes(data, size=16, unsigned=False)
+                    self.SENSOR_DATA['gyroscope'][1] = self.readbytes(data, size=16, unsigned=False)
+                    self.SENSOR_DATA['gyroscope'][2] = self.readbytes(data, size=16, unsigned=False)
 
-                    # no clue about scaling factor
-                    self.SENSOR_DATA['magnetometer'][0] = self.readbytes(data, size=16, unsigned=False) / 1090
-                    self.SENSOR_DATA['magnetometer'][1] = self.readbytes(data, size=16, unsigned=False) / 1090
-                    self.SENSOR_DATA['magnetometer'][2] = self.readbytes(data, size=16, unsigned=False) / 1090
+                    # no clue about scaling factor (/1090), so raw
+                    self.SENSOR_DATA['magnetometer'][0] = self.readbytes(data, size=16, unsigned=False)
+                    self.SENSOR_DATA['magnetometer'][1] = self.readbytes(data, size=16, unsigned=False)
+                    self.SENSOR_DATA['magnetometer'][2] = self.readbytes(data, size=16, unsigned=False)
 
                 elif code == MSPy.MSPCodes['MSP_SERVO']:
                     servoCount = int(len(data) / 2)
@@ -1258,7 +1335,7 @@ class MSPy:
                     self.ANALOG['rssi'] = self.readbytes(data, size=16, unsigned=True) # 0-1023
                     self.ANALOG['amperage'] = self.readbytes(data, size=16, unsigned=False) / 100 # A
                     self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                    if not self.INAV:
                         self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
 
                 elif code == MSPy.MSPCodes['MSP_VOLTAGE_METERS']:
@@ -1289,7 +1366,7 @@ class MSPy:
 
                 elif code == MSPy.MSPCodes['MSP_VOLTAGE_METER_CONFIG']:
                     self.VOLTAGE_METER_CONFIGS = []
-                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                    if self.INAV:
                         voltageMeterConfig = {}
                         voltageMeterConfig['vbatscale'] = self.readbytes(data, size=8, unsigned=True)/10
                         self.VOLTAGE_METER_CONFIGS.append(voltageMeterConfig)
@@ -1316,7 +1393,7 @@ class MSPy:
 
                 elif code == MSPy.MSPCodes['MSP_CURRENT_METER_CONFIG']:
                     self.CURRENT_METER_CONFIGS = []
-                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                    if self.INAV:
                         currentMeterConfig = {}
                         currentMeterConfig['scale'] = self.readbytes(data, size=16, unsigned=True)
                         currentMeterConfig['offset'] = self.readbytes(data, size=16, unsigned=True)
@@ -1369,7 +1446,7 @@ class MSPy:
 
                     self.RC_TUNING['RC_YAW_EXPO'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
 
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                    if not self.INAV:
                         self.RC_TUNING['rcYawRate'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
 
                         self.RC_TUNING['rcPitchRate'] = round((self.readbytes(data, size=8, unsigned=True) / 100.0), 2)
@@ -1395,7 +1472,7 @@ class MSPy:
                 elif code == MSPy.MSPCodes['MSP_ARMING_CONFIG']:
                     self.ARMING_CONFIG['auto_disarm_delay'] = self.readbytes(data, size=8, unsigned=True)
                     self.ARMING_CONFIG['disarm_kill_switch'] = self.readbytes(data, size=8, unsigned=True)
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                    if not self.INAV:
                         self.ARMING_CONFIG['small_angle'] = self.readbytes(data, size=8, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_LOOP_TIME']:
@@ -1516,7 +1593,7 @@ class MSPy:
                     self.SENSOR_ALIGNMENT['align_acc'] = self.readbytes(data, size=8, unsigned=True)
                     self.SENSOR_ALIGNMENT['align_mag'] = self.readbytes(data, size=8, unsigned=True)
 
-                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                    if self.INAV:
                         self.SENSOR_ALIGNMENT['align_opflow'] = self.readbytes(data, size=8, unsigned=True)
                     else:
                         self.SENSOR_ALIGNMENT['gyro_detection_flags'] = self.readbytes(data, size=8, unsigned=True)
@@ -1614,7 +1691,7 @@ class MSPy:
                     
                 elif code == MSPy.MSPCodes['MSP_MIXER_CONFIG']:
                     self.MIXER_CONFIG['mixer'] = self.readbytes(data, size=8, unsigned=True)
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:                    
+                    if not self.INAV:                    
                         self.MIXER_CONFIG['reverseMotorDir'] = self.readbytes(data, size=8, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_FEATURE_CONFIG']:
@@ -1813,7 +1890,7 @@ class MSPy:
                     # spirx_channel_count for INAV
                     self.RX_CONFIG['rxSpiRfChannelCount'] = self.readbytes(data, size=8, unsigned=True)
                     self.RX_CONFIG['fpvCamAngleDegrees'] = self.readbytes(data, size=8, unsigned=True)
-                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                    if self.INAV:
                         self.RX_CONFIG['receiver_type'] = self.readbytes(data, size=8, unsigned=True)
                     else:
                         self.RX_CONFIG['rcInterpolationChannels'] = self.readbytes(data, size=8, unsigned=True)
@@ -1863,7 +1940,7 @@ class MSPy:
                     self.FILTER_CONFIG['gyro_notch2_hz'] = self.readbytes(data, size=16, unsigned=True)
                     self.FILTER_CONFIG['gyro_notch2_cutoff'] = self.readbytes(data, size=16, unsigned=True)
 
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                    if not self.INAV:
                         self.FILTER_CONFIG['dterm_lowpass_type'] = self.readbytes(data, size=8, unsigned=True)
 
                         self.FILTER_CONFIG['gyro_hardware_lpf'] = self.readbytes(data, size=8, unsigned=True)
@@ -1897,7 +1974,7 @@ class MSPy:
                     self.ADVANCED_TUNING['yaw_p_limit'] = self.readbytes(data, size=16, unsigned=True)
                     self.ADVANCED_TUNING['deltaMethod'] = self.readbytes(data, size=8, unsigned=True)
                     self.ADVANCED_TUNING['vbatPidCompensation'] = self.readbytes(data, size=8, unsigned=True)
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                    if not self.INAV:
                         self.ADVANCED_TUNING['feedforwardTransition'] = self.readbytes(data, size=8, unsigned=True)
 
                         self.ADVANCED_TUNING['dtermSetpointWeight'] = self.readbytes(data, size=8, unsigned=True)
@@ -1946,7 +2023,7 @@ class MSPy:
                     self.SENSOR_CONFIG['acc_hardware'] = self.readbytes(data, size=8, unsigned=True)
                     self.SENSOR_CONFIG['baro_hardware'] = self.readbytes(data, size=8, unsigned=True)
                     self.SENSOR_CONFIG['mag_hardware'] = self.readbytes(data, size=8, unsigned=True)
-                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                    if self.INAV:
                         self.SENSOR_CONFIG['pitot'] = self.readbytes(data, size=8, unsigned=True)
                         self.SENSOR_CONFIG['rangefinder'] = self.readbytes(data, size=8, unsigned=True)
                         self.SENSOR_CONFIG['opflow'] = self.readbytes(data, size=8, unsigned=True)
@@ -1973,7 +2050,7 @@ class MSPy:
                     self.SDCARD['totalSizeKB'] = self.readbytes(data, size=32, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_BLACKBOX_CONFIG']:
-                    if 'INAV' not in self.CONFIG['flightControllerIdentifier']:
+                    if not self.INAV:
                         self.BLACKBOX['supported'] = (self.readbytes(data, size=8, unsigned=True) & 1) != 0
                         self.BLACKBOX['blackboxDevice'] = self.readbytes(data, size=8, unsigned=True)
                         self.BLACKBOX['blackboxRateNum'] = self.readbytes(data, size=8, unsigned=True)
