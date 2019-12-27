@@ -1,4 +1,4 @@
-# BetaflightMSPy
+# YAMSPy
 Yet Another Implementation of Multiwii Serial Protocol Python Interface for Betaflight
 
 ## <span style="color:orange;">SAFETY FIRST!</span>
