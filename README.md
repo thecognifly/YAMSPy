@@ -1,5 +1,5 @@
 # YAMSPy
-Yet Another Implementation of Multiwii Serial Protocol Python Interface for Betaflight
+Yet Another Implementation of Multiwii Serial Protocol Python Interface for Betaflight, iNAV, etc.
 
 ## <span style="color:orange;">SAFETY FIRST!</span>
 This work is EXPERIMENTAL and it has been made publicly available expecting to be used only by responsible legally capable adults, etc, etc, etc. Since it's experimental, crazy things may happen mid-flight or even after the drone has landed or, even worse, while the drone is sitting on the floor! Drones, by default, can be **VERY** dangerous if not handled properly. Here are some links that may help you understand what I mean:
