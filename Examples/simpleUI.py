@@ -128,7 +128,7 @@ def keyboard_controller(screen):
             if 'INAV' not in board.CONFIG['flightControllerIdentifier']:
                 cellCount = board.BATTERY_STATE['cellCount']
             else:
-                cellCount = 0
+                cellCount = 0 # MSPV2_INAV_ANALOG is necessary
             min_voltage = board.BATTERY_CONFIG['vbatmincellvoltage']*cellCount
             warn_voltage = board.BATTERY_CONFIG['vbatwarningcellvoltage']*cellCount
             max_voltage = board.BATTERY_CONFIG['vbatmaxcellvoltage']*cellCount
