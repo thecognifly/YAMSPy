@@ -1,25 +1,23 @@
-"""BetaflightMSPy: Modern Betaflight Multiwii Serial Protocol for Python
+"""YAMSPy: Modern Betaflight Multiwii Serial Protocol for Python
 
 Copyright (C) 2019 Ricardo de Azambuja
 
-This file is part of BetaflightMSPy.
+This file is part of YAMSPy.
 
-BetaflightMSPy is free software: you can redistribute it and/or modify
+YAMSPy is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-BetaflightMSPy is distributed in the hope that it will be useful,
+YAMSPy is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with BetaflightMSPy.  If not, see <https://www.gnu.org/licenses/>.
+along with YAMSPy.  If not, see <https://www.gnu.org/licenses/>.
 
-Designed / tested on MultiWii API version 1.41.0 and Betaflight 4.0.0 and Linux.
-
-Deeply based on Betaflight-configurator and Betaflight firmware.
+Deeply based on code from Betaflight and iNAV.
 
 Acknowledgement:
 This work was possible thanks to the financial support from IVADO.ca (postdoctoral scholarship 2019/2020).
@@ -30,12 +28,10 @@ connected (or not) with this project, in any way whatsoever, can be made respons
 contained or linked from here.
 
 TODO:
-1) Check for occurrences of 1.42.* in the betaflight-configurator
-because the current firmware (master) at github is this one (1.42) and I 
-think I skipped some situations where it was testing semver.gte 1.42...
+1) Add more support to iNAV.
 2) Add the possibility to register a callback functions when a msg is transmitted.
 3) Improve the arming confirmation.
-4) Port the CLI from betaflight-configurator (code below) to python.
+4) Check if dictionaries, namedtuples, whatever would work better than chains of elifs.
 """
 
 __author__ = "Ricardo de Azambuja"
@@ -817,9 +813,10 @@ class MSPy:
             0 if successful or 1 if not
         """
 
-        for i in range(trials):
+        for _ in range(trials):
             try:
                 self.conn.open()
+                self.get_basic_info()                
                 return 0
                 
             except serial.SerialException as err:
@@ -832,6 +829,17 @@ class MSPy:
         
         return 1
 
+    def get_basic_info(self):
+        """Basic info about the flight controller to distinguish between the many flavours.
+        """
+        for msg in ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 
+                    'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM',
+                    'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']:
+            if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+                dataHandler = self.receive_msg()
+                self.process_recv_data(dataHandler)
+        print(self.CONFIG)
+    
     def fast_read_imu(self):
         """Request, read and process the IMU
         """
@@ -920,45 +928,6 @@ class MSPy:
             # will return a code 200. However, the message is always empty (data_length = 0).
             _ = self.receive_raw_msg(size = 6)
 
-
-    # def fast_cmd_and_read(self, cmds):
-    #     """Send RAW RC considering the MSP_RX and receive IMU, ATTITUDE and ANALOG
-
-    #     First it will send all requests and then read the serial at once.
-
-    #     Parameters
-    #     ----------
-    #     cmds : list
-    #         List with RC values to be sent
-    #         * The number of values is 4 + number of AUX channels enabled (max 14) 
-    #     """
-    #     data = struct.pack('<%dH' % len(cmds), *cmds)
-    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
-    #     # _ = self.receive_raw_msg(size = 6)
-
-    #     # Request IMU values
-    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU'])
-    #     # data_length = 18
-    #     # msg = self.receive_raw_msg(size = (6+data_length))[5:]
-    #     # converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
-
-    #     # Request ATTITUDE values
-    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_ATTITUDE'])
-    #     # data_length = 6
-    #     # msg = self.receive_raw_msg(size = (6+data_length))[5:]
-    #     # converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
-
-    #     # Request ANALOG values
-    #     self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG'])
-    #     # data_length = 9
-    #     # msg = self.receive_raw_msg(size = (6+data_length))[5:]
-    #     # converted_msg = struct.unpack('<B2HhH', msg[:-1])
-
-    #     # Receiving RC ACK(0), IMU(18), ATTITUDE(6) and ANALOG(9) + headers(5*4) and crcs(1*4)
-    #     msg = self.conn.read(0+18+6+9+24)
-
-    #     # Now it would need to process the received packages...
-    #     # but calling the other fast_* methods seems to be as fast as this one.
         
     def receive_raw_msg(self, size = None):
         """Receive multiple bytes at once when it's not a jumbo frame.
@@ -1977,6 +1946,10 @@ class MSPy:
                     self.SENSOR_CONFIG['acc_hardware'] = self.readbytes(data, size=8, unsigned=True)
                     self.SENSOR_CONFIG['baro_hardware'] = self.readbytes(data, size=8, unsigned=True)
                     self.SENSOR_CONFIG['mag_hardware'] = self.readbytes(data, size=8, unsigned=True)
+                    if 'INAV' in self.CONFIG['flightControllerIdentifier']:
+                        self.SENSOR_CONFIG['pitot'] = self.readbytes(data, size=8, unsigned=True)
+                        self.SENSOR_CONFIG['rangefinder'] = self.readbytes(data, size=8, unsigned=True)
+                        self.SENSOR_CONFIG['opflow'] = self.readbytes(data, size=8, unsigned=True)
 
                 elif code == MSPy.MSPCodes['MSP_DATAFLASH_SUMMARY']:
                     flags = self.readbytes(data, size=8, unsigned=True)

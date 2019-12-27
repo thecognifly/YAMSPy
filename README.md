@@ -10,8 +10,8 @@ This work is EXPERIMENTAL and it has been made publicly available expecting to b
 
 ## Installation:
 ```
-$ git clone https://github.com/ricardodeazambuja/BetaflightMSPy.git
-$ cd BetaflightMSPy
+$ git clone https://github.com/ricardodeazambuja/YAMSPy.git
+$ cd YAMSPy
 $ sudo pip3 install .
 ```
 

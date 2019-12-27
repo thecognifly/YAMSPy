@@ -1,21 +1,21 @@
-"""simpleUI.py: Simple UI (toy one really) to test BetaflightMSPy using a SSH connection.
+"""simpleUI.py: Simple UI (toy one really) to test YAMSPy using a SSH connection.
 
 Copyright (C) 2019 Ricardo de Azambuja
 
-This file is part of BetaflightMSPy.
+This file is part of YAMSPy.
 
-BetaflightMSPy is free software: you can redistribute it and/or modify
+YAMSPy is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-BetaflightMSPy is distributed in the hope that it will be useful,
+YAMSPy is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with BetaflightMSPy.  If not, see <https://www.gnu.org/licenses/>.
+along with YAMSPy.  If not, see <https://www.gnu.org/licenses/>.
 
 
 WARNING:
@@ -49,7 +49,7 @@ import curses
 from collections import deque
 from itertools import cycle
 
-from betaflightmspy import MSPy
+from yamspy import MSPy
 
 # Max periods for:
 CTRL_LOOP_TIME = 1/100

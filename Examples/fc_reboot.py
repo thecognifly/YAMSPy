@@ -2,20 +2,20 @@
 
 Copyright (C) 2019 Ricardo de Azambuja
 
-This file is part of BetaflightMSPy.
+This file is part of YAMSPy.
 
-BetaflightMSPy is free software: you can redistribute it and/or modify
+YAMSPy is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-BetaflightMSPy is distributed in the hope that it will be useful,
+YAMSPy is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with BetaflightMSPy.  If not, see <https://www.gnu.org/licenses/>.
+along with YAMSPy.  If not, see <https://www.gnu.org/licenses/>.
 
 Acknowledgement:
 This work was possible thanks to the financial support from IVADO.ca (postdoctoral scholarship 2019/2020).
@@ -26,7 +26,7 @@ connected (or not) with this project, in any way whatsoever, can be made respons
 contained or linked from here.
 """
 import time
-from betaflightmspy import MSPy
+from yamspy import MSPy
 
 if __name__ == '__main__':
     with MSPy(device="/dev/ttyACM0", loglevel='WARNING') as board:
