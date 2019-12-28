@@ -35,7 +35,7 @@ from yamspy import MSPy
 """Usage example... and testing ;)
 """
 
-avoid_list = ['MSP_EEPROM_WRITE']
+avoid_list = ['MSP_DATAFLASH_ERASE','MSP_DATAFLASH_READ','MSP_EEPROM_WRITE']
 
 with MSPy(device="/dev/ttyACM0") as board:
     if board==1:
