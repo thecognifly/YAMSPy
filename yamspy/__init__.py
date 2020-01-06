@@ -818,7 +818,6 @@ class MSPy:
             11: "BLOCKED_NAVIGATION_SAFETY",
             12: "BLOCKED_COMPASS_NOT_CALIBRATED",
             13: "BLOCKED_ACCELEROMETER_NOT_CALIBRATED",
-            14: "",
             15: "BLOCKED_HARDWARE_FAILURE",
             26: "BLOCKED_INVALID_SETTING"
             }
