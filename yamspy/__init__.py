@@ -782,7 +782,31 @@ class MSPy:
             'providers':                  [],
         }
 
-        self.armingDisableFlagNames = [
+        self.armingDisableFlagNames_BF = [
+            "NOGYRO",
+            "FAILSAFE",
+            "RXLOSS",
+            "BADRX",
+            "BOXFAILSAFE",
+            "RUNAWAY",
+            "CRASH",
+            "THROTTLE",
+            "ANGLE",
+            "BOOTGRACE",
+            "NOPREARM",
+            "LOAD",
+            "CALIB",
+            "CLI",
+            "CMS",
+            "BST",
+            "MSP",
+            "PARALYZE",
+            "GPS",
+            "RESCUE SW",
+            "RPMFILTER",
+            "ARMSWITCH"]
+
+        self.armingDisableFlagNames_INAV = [
             "NOGYRO",
             "FAILSAFE",
             "RXLOSS",
@@ -1276,7 +1300,10 @@ class MSPy:
         while (flags):
             bitpos = libc.ffs(flags) - 1
             flags &= ~(1 << bitpos)
-            result.append(self.armingDisableFlagNames[bitpos])
+            if self.inav:
+                result.append(self.armingDisableFlagNames_INAV[bitpos])
+            else:
+                result.append(self.armingDisableFlagNames_BF[bitpos])
         return result
 
 
