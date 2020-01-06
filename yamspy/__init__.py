@@ -782,54 +782,46 @@ class MSPy:
             'providers':                  [],
         }
 
-        self.armingDisableFlagNames_BF = [
-            "NOGYRO",
-            "FAILSAFE",
-            "RXLOSS",
-            "BADRX",
-            "BOXFAILSAFE",
-            "RUNAWAY",
-            "CRASH",
-            "THROTTLE",
-            "ANGLE",
-            "BOOTGRACE",
-            "NOPREARM",
-            "LOAD",
-            "CALIB",
-            "CLI",
-            "CMS",
-            "BST",
-            "MSP",
-            "PARALYZE",
-            "GPS",
-            "RESCUE SW",
-            "RPMFILTER",
-            "ARMSWITCH"]
+        self.armingDisableFlagNames_BF = {
+            0: "NOGYRO",
+            1: "FAILSAFE",
+            2: "RXLOSS",
+            3: "BADRX",
+            4: "BOXFAILSAFE",
+            5: "RUNAWAY",
+            6: "CRASH",
+            7: "THROTTLE",
+            8: "ANGLE",
+            9: "BOOTGRACE",
+            10: "NOPREARM",
+            11: "LOAD",
+            12: "CALIB",
+            13: "CLI",
+            14: "CMS",
+            15: "BST",
+            16: "MSP",
+            17: "PARALYZE",
+            18: "GPS",
+            19: "RESCUE SW",
+            20: "RPMFILTER",
+            21: "ARMSWITCH"
+            }
 
-        self.armingDisableFlagNames_INAV = [
-            "NOGYRO",
-            "FAILSAFE",
-            "RXLOSS",
-            "BADRX",
-            "BOXFAILSAFE",
-            "RUNAWAY",
-            "CRASH",
-            "THROTTLE",
-            "ANGLE",
-            "BOOTGRACE",
-            "NOPREARM",
-            "LOAD",
-            "CALIB",
-            "CLI",
-            "CMS",
-            "BST",
-            "MSP",
-            "PARALYZE",
-            "GPS",
-            "RESCUE SW",
-            "RPMFILTER",
-            "ARMSWITCH"]
-
+        self.armingDisableFlagNames_INAV = {
+            0: "OK_TO_ARM",
+            1: "PREVENT_ARMING",
+            2: "ARMED",
+            3: "WAS_EVER_ARMED",
+            8: "BLOCKED_UAV_NOT_LEVEL",
+            9: "BLOCKED_SENSORS_CALIBRATING",
+            10: "BLOCKED_SYSTEM_OVERLOADED",
+            11: "BLOCKED_NAVIGATION_SAFETY",
+            12: "BLOCKED_COMPASS_NOT_CALIBRATED",
+            13: "BLOCKED_ACCELEROMETER_NOT_CALIBRATED",
+            14: "",
+            15: "BLOCKED_HARDWARE_FAILURE",
+            26: "BLOCKED_INVALID_SETTING"
+            }
 
         if logfilename:
             logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
@@ -1300,10 +1292,10 @@ class MSPy:
         while (flags):
             bitpos = libc.ffs(flags) - 1
             flags &= ~(1 << bitpos)
-            if self.inav:
-                result.append(self.armingDisableFlagNames_INAV[bitpos])
+            if self.INAV:
+                result.append(self.armingDisableFlagNames_INAV.get(bitpos, ""))
             else:
-                result.append(self.armingDisableFlagNames_BF[bitpos])
+                result.append(self.armingDisableFlagNames_BF.get(bitpos, ""))
         return result
 
 
