@@ -1011,13 +1011,13 @@ class MSPy:
                 msg = self.receive_raw_msg(size = (6+data_length))[5:]
                 converted_msg = struct.unpack('<B2Hh', msg[:-1])
 
-            self.ANALOG['voltage'] = converted_msg[0] / 10
+            self.ANALOG['voltage'] = converted_msg[0] / 10 # iNAV uses a MSPV2 message to get a precise value.
             self.ANALOG['mAhdrawn'] = converted_msg[1]
             self.ANALOG['rssi'] = converted_msg[2] # 0-1023
             self.ANALOG['amperage'] = converted_msg[3] / 100 # A
             self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
             if not self.INAV:
-                self.ANALOG['voltage'] = converted_msg[4] / 100
+                self.ANALOG['voltage'] = converted_msg[4] / 100 # BF has this 2 bytes value here
 
 
     def fast_msp_rc_cmd(self, cmds):
