@@ -999,17 +999,22 @@ class MSPy:
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG']):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
-            # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
-            data_length = 9
+            if not self.INAV:
+                # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
+                data_length = 9
+            else:
+                # data_length: 1 + 2 + 2 + 2 = 7 bytes
+                data_length = 7
             msg = self.receive_raw_msg(size = (6+data_length))[5:]
             converted_msg = struct.unpack('<B2HhH', msg[:-1])
 
-            # the first byte (converted_msg[0]) is only used on old systems...
+            self.ANALOG['voltage'] = converted_msg[0] / 10
             self.ANALOG['mAhdrawn'] = converted_msg[1]
             self.ANALOG['rssi'] = converted_msg[2] # 0-1023
             self.ANALOG['amperage'] = converted_msg[3] / 100 # A
             self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
-            self.ANALOG['voltage'] = converted_msg[4] / 100
+            if not self.INAV:
+                self.ANALOG['voltage'] = converted_msg[4] / 100
 
 
     def fast_msp_rc_cmd(self, cmds):
