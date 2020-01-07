@@ -1009,7 +1009,7 @@ class MSPy:
                 # data_length: 1 + 2 + 2 + 2 = 7 bytes
                 data_length = 7
                 msg = self.receive_raw_msg(size = (6+data_length))[5:]
-                converted_msg = struct.unpack('<B2HhH', msg[:-1])
+                converted_msg = struct.unpack('<B2Hh', msg[:-1])
 
             self.ANALOG['voltage'] = converted_msg[0] / 10
             self.ANALOG['mAhdrawn'] = converted_msg[1]
