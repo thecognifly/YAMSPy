@@ -1662,7 +1662,7 @@ class MSPy:
         self.ANALOG['rssi'] = self.readbytes(data, size=16, unsigned=True) # 0-1023
 
         # TODO: update both BF and INAV variables
-        self.BATTERY_STATE['cellcount'] = self.ANALOG['cell_count']
+        self.BATTERY_STATE['cellCount'] = self.ANALOG['cell_count']
 
     def process_MSP_VOLTAGE_METERS(self, data):
         total_bytes_per_meter = (8+8)/8 # just to make it clear where it comes from...
