@@ -121,11 +121,14 @@ def keyboard_controller(screen):
                             'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
                             'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
 
+            if board.INAV:
+                command_list.append('MSPV2_INAV_ANALOG')
+                
             for msg in command_list: 
                 if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                     dataHandler = board.receive_msg()
                     board.process_recv_data(dataHandler)
-            if 'INAV' not in board.CONFIG['flightControllerIdentifier']:
+            if board.INAV:
                 cellCount = board.BATTERY_STATE['cellCount']
             else:
                 cellCount = 0 # MSPV2_INAV_ANALOG is necessary
