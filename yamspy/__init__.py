@@ -931,7 +931,7 @@ class MSPy:
                                'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
         if self.INAV:
             basic_info_cmd_list.append('MSPV2_INAV_ANALOG')
-            
+
         for msg in basic_info_cmd_list:
             if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                 dataHandler = self.receive_msg()
@@ -1660,6 +1660,9 @@ class MSPy:
         self.ANALOG['battery_remaining_capacity'] = self.readbytes(data, size=32, unsigned=True)
         self.ANALOG['battery_percentage'] = self.readbytes(data, size=8, unsigned=True)
         self.ANALOG['rssi'] = self.readbytes(data, size=16, unsigned=True) # 0-1023
+
+        # TODO: update both BF and INAV variables
+        self.BATTERY_STATE['cellcount'] = self.ANALOG['cell_count']
 
     def process_MSP_VOLTAGE_METERS(self, data):
         total_bytes_per_meter = (8+8)/8 # just to make it clear where it comes from...
