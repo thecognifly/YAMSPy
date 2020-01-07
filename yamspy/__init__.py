@@ -927,9 +927,12 @@ class MSPy:
         else:
             self.INAV = False
 
-        for msg in ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 
-                    'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 
-                    'MSP_STATUS_EX']:
+        basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 
+                               'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
+        if self.INAV:
+            basic_info_cmd_list.append('MSPV2_INAV_ANALOG')
+            
+        for msg in basic_info_cmd_list:
             if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                 dataHandler = self.receive_msg()
                 self.process_recv_data(dataHandler)
