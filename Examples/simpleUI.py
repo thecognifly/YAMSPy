@@ -123,7 +123,8 @@ def keyboard_controller(screen):
 
             if board.INAV:
                 command_list.append('MSPV2_INAV_ANALOG')
-                
+                command_list.append('MSP_VOLTAGE_METER_CONFIG')
+
             for msg in command_list: 
                 if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                     dataHandler = board.receive_msg()

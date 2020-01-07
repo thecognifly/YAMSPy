@@ -931,6 +931,7 @@ class MSPy:
                                'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
         if self.INAV:
             basic_info_cmd_list.append('MSPV2_INAV_ANALOG')
+            basic_info_cmd_list.append('MSP_VOLTAGE_METER_CONFIG')
 
         for msg in basic_info_cmd_list:
             if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
