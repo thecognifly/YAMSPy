@@ -1002,11 +1002,14 @@ class MSPy:
             if not self.INAV:
                 # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
                 data_length = 9
+                msg = self.receive_raw_msg(size = (6+data_length))[5:]
+                converted_msg = struct.unpack('<B2HhH', msg[:-1])
+
             else:
                 # data_length: 1 + 2 + 2 + 2 = 7 bytes
                 data_length = 7
-            msg = self.receive_raw_msg(size = (6+data_length))[5:]
-            converted_msg = struct.unpack('<B2HhH', msg[:-1])
+                msg = self.receive_raw_msg(size = (6+data_length))[5:]
+                converted_msg = struct.unpack('<B2HhH', msg[:-1])
 
             self.ANALOG['voltage'] = converted_msg[0] / 10
             self.ANALOG['mAhdrawn'] = converted_msg[1]
