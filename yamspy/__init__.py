@@ -1,4 +1,4 @@
-"""YAMSPy: Modern Betaflight Multiwii Serial Protocol for Python
+"""YAMSPy: Yet Another Implementation of Multiwii Serial Protocol Python Interface for Betaflight, iNAV, etc.
 
 Copyright (C) 2019 Ricardo de Azambuja
 
