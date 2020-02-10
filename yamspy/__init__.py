@@ -374,7 +374,7 @@ class MSPy:
             'altitude':                   0,
             'sonar':                      0,
             'kinematics':                 [0.0, 0.0, 0.0],
-            'debug':                      [0, 0, 0, 0],
+            'debug':                      [0, 0, 0, 0, 0, 0, 0, 0], # 8 values for special situations like MSP2_INAV_DEBUG
         }
 
         self.MOTOR_DATA = [0]*8
@@ -1263,7 +1263,7 @@ class MSPy:
 
 
     @staticmethod
-    def readbytes(data, size=8, unsigned=False):
+    def readbytes(data, size=8, unsigned=False, read_as_float=False):
         """Unpack bytes according to size / type
 
         Parameters
@@ -1274,6 +1274,8 @@ class MSPy:
             Number of bits (8, 16 or 32) (default is 8)
         unsigned : bool, optional
             Indicates if data is unsigned or not (default is False)
+        read_as_float: bool, optional
+            Indicates if data is read as float or not (default is False)
             
         Returns
         -------
@@ -1288,9 +1290,15 @@ class MSPy:
         if size==8:
             unpack_format = 'b'
         elif size==16:
-            unpack_format = 'h'
+            if read_as_float: # for special situations like MSP2_INAV_DEBUG
+                unpack_format = 'e'
+            else:   
+                unpack_format = 'h'
         elif size==32:
-            unpack_format = 'i'
+            if read_as_float: # for special situations like MSP2_INAV_DEBUG
+                unpack_format = 'f'
+            else:
+                unpack_format = 'i'
         
         if unsigned:
             unpack_format = unpack_format.upper()
@@ -2023,6 +2031,10 @@ class MSPy:
     def process_MSP_DEBUG(self, data):
         for i in range(4):
             self.SENSOR_DATA['debug'][i] = self.readbytes(data, size=16, unsigned=False)
+
+    def process_MSP2_INAV_DEBUG(self, data):
+        for i in range(8):
+            self.SENSOR_DATA['debug'][i] = self.readbytes(data, size=32, unsigned=False)
 
     def process_MSP_SET_MOTOR(self, data):
         logging.info('Motor Speeds Updated')
