@@ -1148,7 +1148,6 @@ class MSPy:
                 elif dataHandler['state'] == 3.2: # MSP V2: msg length HIGH
                     dataHandler['message_length_expected'] |= data << 8
                     # setup buffer according to the message_length_expected
-                    dataHandler['message_buffer'] = bytearray(dataHandler['message_length_expected'])
                     dataHandler['message_buffer_uint8_view'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
                     if dataHandler['message_length_expected'] > 0:
                         dataHandler['state'] = 7
