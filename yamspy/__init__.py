@@ -945,9 +945,9 @@ class MSPy:
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_ALTITUDE']):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
-            data_length = 32
+            data_length = 4
             msg = self.receive_raw_msg(size = (6+data_length))[5:]
-            converted_msg = struct.unpack('<i', msg[:-1])
+            converted_msg = struct.unpack('<i', msg[:-1])[0]
             self.SENSOR_DATA['altitude'] = round((converted_msg / 100.0), 2) # correct scale factor
 
     def fast_read_imu(self):
