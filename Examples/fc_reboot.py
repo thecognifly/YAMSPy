@@ -1,6 +1,6 @@
 """fc_reboot.py: Reboot your flight controller (Betaflight)
 
-Copyright (C) 2019 Ricardo de Azambuja
+Copyright (C) 2020 Ricardo de Azambuja
 
 This file is part of YAMSPy.
 
@@ -28,7 +28,21 @@ contained or linked from here.
 import time
 from yamspy import MSPy
 
+#
+# On Linux, your serial port will probably be something like
+# /dev/ttyACM0 or /dev/ttyS0 or the same names with numbers different from 0
+#
+# On Windows, I would expect it to be 
+# COM1 or COM2 or COM3...
+#
+# This library uses pyserial, so if you have more questions try to check its docs:
+# https://pyserial.readthedocs.io/en/latest/shortintro.html
+#
+#
+serial_port = "/dev/ttyACM0"
+
 if __name__ == '__main__':
-    with MSPy(device="/dev/ttyACM0", loglevel='WARNING') as board:
-        board.reboot()
+    with MSPy(device=serial_port, loglevel='WARNING') as board:
+        board.reboot() # sometimes it's necessary to reboot your board
+                       # like after a small crash, or the flight controller will not arm again
         time.sleep(2)

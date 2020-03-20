@@ -1,6 +1,6 @@
 """simpleUI.py: Simple UI (toy one really) to test YAMSPy using a SSH connection.
 
-Copyright (C) 2019 Ricardo de Azambuja
+Copyright (C) 2020 Ricardo de Azambuja
 
 This file is part of YAMSPy.
 
@@ -31,12 +31,12 @@ contained or linked from here.
 
 
 TODO:
-1) The integrator makes too hard to control things (it winds up). Probably a non-linear thing would be helpful here...
-
+1) The integrator makes it too hard to control things (it winds up). Probably a non-linear thing would be helpful here...
+2) Everything is far from optimal so it could be improved... but it's a simpleUI example after all ;)
 """
 
 __author__ = "Ricardo de Azambuja"
-__copyright__ = "Copyright 2019, MISTLab.ca"
+__copyright__ = "Copyright 2020, MISTLab.ca"
 __credits__ = [""]
 __license__ = "GPL"
 __version__ = "0.0.1"
@@ -56,6 +56,20 @@ CTRL_LOOP_TIME = 1/100
 SLOW_MSGS_LOOP_TIME = 1/5 # these messages take a lot of time slowing down the loop...
 
 NO_OF_CYCLES_AVERAGE_GUI_TIME = 10
+
+
+#
+# On Linux, your serial port will probably be something like
+# /dev/ttyACM0 or /dev/ttyS0 or the same names with numbers different from 0
+#
+# On Windows, I would expect it to be 
+# COM1 or COM2 or COM3...
+#
+# This library uses pyserial, so if you have more questions try to check its docs:
+# https://pyserial.readthedocs.io/en/latest/shortintro.html
+#
+#
+SERIAL_PORT = "/dev/ttyACM0"
 
 def run_curses(external_function):
     result=1
@@ -98,14 +112,17 @@ def keyboard_controller(screen):
             'aux2':     1000
             }
 
+    # This order is the important bit: it will depend on how your flight controller is configured.
+    # Below it is considering the flight controller is set to use AETR.
+    # The names here don't really matter, they just need to match what is used for the CMDS dictionary.
+    # In the documentation, iNAV uses CH5, CH6, etc while Betaflight goes AUX1, AUX2...
     CMDS_ORDER = ['roll', 'pitch', 'throttle', 'yaw', 'aux1', 'aux2']
 
-    # print doesn't work with curses, use addstr instead
-
+    # "print" doesn't work with curses, use addstr instead
     try:
         screen.addstr(15, 0, "Connecting to the FC...")
 
-        with MSPy(device="/dev/ttyACM0", loglevel='WARNING', baudrate=115200) as board:
+        with MSPy(device=SERIAL_PORT, loglevel='WARNING', baudrate=115200) as board:
             if board == 1: # an error occurred...
                 return 1
 
@@ -115,7 +132,7 @@ def keyboard_controller(screen):
 
             average_cycle = deque([0]*NO_OF_CYCLES_AVERAGE_GUI_TIME)
 
-            # It's necessary to send some messages or the RX failsafe will be active
+            # It's necessary to send some messages or the RX failsafe will be activated
             # and it will not be possible to arm.
             command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
                             'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
@@ -168,20 +185,24 @@ def keyboard_controller(screen):
                     break
 
                 elif char == ord('d') or char == ord('D'):
-                    cursor_msg = 'Disarming...'
+                    cursor_msg = 'Sending Disarm command...'
                     CMDS['aux1'] = 1000
 
                 elif char == ord('r') or char == ord('R'):
-                    screen.addstr(3, 0, 'Rebooting...')
+                    screen.addstr(3, 0, 'Sending Reboot command...')
                     screen.clrtoeol()
                     board.reboot()
                     time.sleep(0.5)
                     break
 
                 elif char == ord('a') or char == ord('A'):
-                    cursor_msg = 'Arming...'
+                    cursor_msg = 'Sending Arm command...'
                     CMDS['aux1'] = 1800
 
+                #
+                # The code below is expecting the drone to have the
+                # modes set accordingly since everything is hardcoded.
+                #
                 elif char == ord('m') or char == ord('M'):
                     if CMDS['aux2'] <= 1300:
                         cursor_msg = 'Horizon Mode...'
