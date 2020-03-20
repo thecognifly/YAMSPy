@@ -1,6 +1,6 @@
 """example.py: Just an example of how to use YAMSPy.
 
-Copyright (C) 2019 Ricardo de Azambuja
+Copyright (C) 2020 Ricardo de Azambuja
 
 This file is part of YAMSPy.
 
@@ -33,11 +33,29 @@ import serial
 from yamspy import MSPy
 
 """Usage example... and testing ;)
+This simple example will send all possible MSP commands, but the ones from avoid_list.
 """
 
+# This list has commands that may cause havok... 
+# I may have missed something, so were warned ;)
 avoid_list = ['MSP_DATAFLASH_ERASE','MSP_DATAFLASH_READ','MSP_EEPROM_WRITE']
 
-with MSPy(device="/dev/ttyACM0") as board:
+#
+# On Linux, your serial port will probably be something like
+# /dev/ttyACM0 or /dev/ttyS0 or the same names with numbers different from 0
+#
+# On Windows, I would expect it to be 
+# COM1 or COM2 or COM3...
+#
+# This library uses pyserial, so if you have more questions try to check its docs:
+# https://pyserial.readthedocs.io/en/latest/shortintro.html
+#
+#
+serial_port = "/dev/ttyACM0"
+
+# As you run this script, it will save a file MSPy.log with a very detailed info about all the 
+# things sent and received through the serial port because of the argument loglevel='DEBUG'. 
+with MSPy(device=serial_port, logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG') as board:
     if board==1:
         print("An error ocurred... probably the serial port is not available ;)")
         sys.exit(1)
