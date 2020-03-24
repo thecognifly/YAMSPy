@@ -8,6 +8,7 @@ This work is ***EXPERIMENTAL*** and it has been made publicly available expectin
 - http://knowbeforeyoufly.org/
 - [LiPo batteries themselves need TLC to be safe](https://www.robotshop.com/media/files/pdf/hyperion-g5-50c-3s-1100mah-lipo-battery-User-Guide.pdf)
 - [Videos where they test drone impacts against... pork](https://www.youtube.com/channel/UCu_iJC8iWK9VYzrXeAvzi1g/videos)
+- [Finally, your classic Mythbusters video](https://www.youtube.com/watch?v=xvyMmKKSGFg)
 
 ### <span style="color:orange;">**Disclaimer (adapted from Wikipedia):** None of the authors, contributors, supervisors administrators, employers, friends, family, vandals, or anyone else connected (or not) with this project, in any way whatsoever, can be made responsible for the use of the information (code) contained or linked from here.</span>
 
