@@ -33,7 +33,7 @@ class ImgCap(io.IOBase):
     '''
     def __init__(self, inference, lock, args = None, DEBUG = False):
         # Init the stuff we are inheriting from
-        super(__class__, self).__init__()
+        super().__init__()
 
         self.inference = inference
 
