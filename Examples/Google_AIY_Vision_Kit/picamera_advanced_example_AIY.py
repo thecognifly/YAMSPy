@@ -36,6 +36,8 @@ class ImgCap(io.IOBase):
 
         self.DEBUG = DEBUG
 
+        self.inference = ImageInference(model)
+
         # Set video frame parameters
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
@@ -59,14 +61,13 @@ class ImgCap(io.IOBase):
             # b is the numpy array of the image, 3 bytes of color depth
             self.output = np.reshape(np.frombuffer(b, dtype=np.uint8), (self.frameHeight, self.frameWidth, 3))
 
+            image_center, offset = crop_center(Image.fromarray(self.output))
+            result = self.inference.run(image_center)
             if self.DEBUG:
-                with ImageInference(model) as inference:
-                    image_center, offset = crop_center(Image.fromarray(self.output))
-                    result = inference.run(image_center)
-                    print("ImgCap - Inference done!")
-
-                print("ImgCap - Image.shape {}".format(self.output.shape))
-                print("ImgCap - Running at {:2.2f} Hz".format(1/(time.time()-self.prev_time)))
+                print(f"ImgCap - Inference result: {result}")
+                print(f"ImgCap - Image.shape {self.output.shape}")
+                
+            print(f"ImgCap - Running at {1/(time.time()-self.prev_time):2.2f} Hz")
 
             self.prev_time = time.time()
 
@@ -82,9 +83,6 @@ if __name__ == "__main__":
     import argparse
 
     import picamera
-
-
-    DEBUG = True
 
     # See https://picamera.readthedocs.io/en/release-1.10/api_camera.html
     # for details about the parameters:
@@ -109,7 +107,10 @@ if __name__ == "__main__":
     parser.add_argument('--input_depth', type=int, default=3, help='Input depth.')
     parser.add_argument('--input_mean', type=float, default=128.0, help='Input mean.')
     parser.add_argument('--input_std', type=float, default=128.0, help='Input std.')
+    parser.add_argument('--debug', default=False, action='store_true')
     args = parser.parse_args()
+
+    DEBUG = args.debug
 
     model = ModelDescriptor(
         name=args.model_name,
