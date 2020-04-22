@@ -69,3 +69,6 @@ Currently the main library is made of a HUGE single file. That is just terrible,
 
 ## Acknowledgments:
 Many people from [MISTLab](http://mistlab.ca/) helped during the development of this library. Special thanks goes to [Tom](https://github.com/cmftom) and [Yann](https://github.com/yannbouteiller).
+
+
+This work was possible thanks to the financial support from [IVADO.ca (postdoctoral scholarship 2019/2020)](https://ivado.ca/en/ivado-scholarships/postdoctoral-scholarships/).
