@@ -63,10 +63,9 @@ Screen can be as annoying as [VIM](https://stackoverflow.blog/2017/05/23/stack-o
 - ```ctrl+a and the ESC key``` to move around using the arrow keys (to stop this behaviour just press the ESC key again.
 - ```ctrl+a, then : and finally H``` to save everything printed on the screen after that point.
 
+## TODO:
+Currently the main library is made of a HUGE single file. That is just terrible, but I didn't have time to split it and test. So if you want to help, please, be my guest. Talking about testing, I haven't implemented any automated test besides the example files, again, be my guest ;)
+
 
 ## Acknowledgments:
 Many people from [MISTLab](http://mistlab.ca/) helped during the development of this library. Special thanks goes to [Tom](https://github.com/cmftom) and [Yann](https://github.com/yannbouteiller).
-
-
-## TODO:
-Currently the main library is made of a HUGE single file. That is just terrible, but I didn't have time to split it and test. So if you want to help, please, be my guest. Talking about testing, I haven't implemented any automated test besides the example files, again, be my guest ;)
