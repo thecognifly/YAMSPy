@@ -13,10 +13,16 @@ This work is ***EXPERIMENTAL*** and it has been made publicly available expectin
 ### <span style="color:orange;">**Disclaimer (adapted from Wikipedia):** None of the authors, contributors, supervisors administrators, employers, friends, family, vandals, or anyone else connected (or not) with this project, in any way whatsoever, can be made responsible for the use of the information (code) contained or linked from here.</span>
 
 ## Installation (Python3 because [you should not use Python2 anymore](https://www.python.org/doc/sunset-python-2/)):
+Option #1: Clone the repo so you will have the examples
 ```
 $ git clone https://github.com/ricardodeazambuja/YAMSPy.git
 $ cd YAMSPy
 $ sudo pip3 install .
+```
+
+Option #2: Install directly from git
+```
+$ sudo pip3 install git+git://github.com/ricardodeazambuja/yamspy
 ```
 
 On Linux you may need to add your user to the dialout group:  
