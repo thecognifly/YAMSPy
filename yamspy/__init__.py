@@ -1086,12 +1086,18 @@ class MSPy:
         with self.serial_port_read_lock: # It's necessary to lock everything because order is important
             di = 0
             while True:
-                data = received_bytes[di]
-                di += 1
-            # for data in received_bytes:
-                logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
-                                                                        dataHandler['state'], 
-                                                                        data))
+                try:
+                    data = received_bytes[di]
+                    di += 1
+                    logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
+                                                                            dataHandler['state'], 
+                                                                            data))
+                except IndexError:
+                    # Instead of crashing everything, let's just ignore this msg...
+                    # ... and hope for the best :)
+                    logging.warning('IndexError detected on state: {}'.format(dataHandler['state']))
+                    dataHandler['state'] = -1
+
                 # it will always fall in the first state by default
                 if dataHandler['state'] == 0: # sync char 1
                     if (data == 36): # $ - a new MSP message begins with $
