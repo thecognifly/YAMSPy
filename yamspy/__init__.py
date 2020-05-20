@@ -1547,7 +1547,7 @@ class MSPy:
             logging.debug("Nothing was received - Code 0")
             return 1
 
-        if (not dataHandler['crcError']) and data:
+        if (not dataHandler['crcError']) and (not dataHandler['packet_error']) and data:
             result = 0
             if (not dataHandler['unsupported']):
                 processor = MSPy.__dict__.get("process_" + MSPy.MSPCodes2Str[code])
@@ -1559,8 +1559,11 @@ class MSPy:
             else:
                 logging.info('FC reports unsupported message error - Code {}'.format(code))
                 result = 1
-        else:
+        elif (not dataHandler['crcError']):
             logging.warning("dataHandler has a crcError.")
+            result = 1
+        else:
+            logging.warning("dataHandler has an Error.")
             result = 1
         
         return result
