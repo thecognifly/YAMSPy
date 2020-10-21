@@ -49,8 +49,12 @@ import time
 import sys
 from threading import Lock
 
-import ctypes
-libc = ctypes.cdll.LoadLibrary('libc.so.6') # this is only for ffs... it should be directly implemented.
+if "linux" in sys.platform:
+    import ctypes
+    ffs = ctypes.cdll.LoadLibrary('libc.so.6').ffs # this is only for ffs... it should be directly implemented.
+else:
+    def ffs(x): # modified from https://stackoverflow.com/a/36059264
+        return (x&-x).bit_length()
 
 import serial # pyserial version???
 
@@ -1323,7 +1327,7 @@ class MSPy:
     def process_armingDisableFlags(self, flags):
         result = []
         while (flags):
-            bitpos = libc.ffs(flags) - 1
+            bitpos = ffs(flags) - 1
             flags &= ~(1 << bitpos)
             if self.INAV:
                 result.append(self.armingDisableFlagNames_INAV.get(bitpos, ""))
