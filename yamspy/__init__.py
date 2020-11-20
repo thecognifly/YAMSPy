@@ -61,7 +61,11 @@ import serial # pyserial version???
 class MSPy:
 
     # Dictionary with all the possible codes
-    # Copied from betaflight-configurator (https://git.io/fjRAa)
+    # Based on betaflight-configurator and inav-configurator 
+    # Latest versions can be found:
+    #  https://github.com/betaflight/betaflight-configurator/blob/master/src/js/msp/MSPCodes.js
+    #  https://github.com/iNavFlight/inav-configurator/blob/master/js/msp/MSPCodes.js
+
     MSPCodes = {
         'MSP_API_VERSION':                1,
         'MSP_FC_VARIANT':                 2,
