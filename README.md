@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4306818.svg)](https://doi.org/10.5281/zenodo.4306818)
+
 # YAMSPy
 Yet Another Implementation of [Multiwii](https://github.com/multiwii) Serial Protocol Python Interface for [Betaflight](https://github.com/betaflight/betaflight), [iNAV](https://github.com/iNavFlight/inav), etc.
 
