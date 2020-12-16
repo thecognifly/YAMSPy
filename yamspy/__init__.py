@@ -109,10 +109,10 @@ class MSPy:
         'MSP_SET_ARMING_CONFIG':          62,
         'MSP_RX_MAP':                     64,
         'MSP_SET_RX_MAP':                 65,
-        'MSP_BF_CONFIG':                  66, # DEPRECATED
-        'MSP_SET_BF_CONFIG':              67, # DEPRECATED
+        #'MSP_BF_CONFIG':                  66, # DEPRECATED
+        #'MSP_SET_BF_CONFIG':              67, # DEPRECATED
         'MSP_SET_REBOOT':                 68,
-        'MSP_BF_BUILD_INFO':              69, # Not used
+        #'MSP_BF_BUILD_INFO':              69, # Not used
         'MSP_DATAFLASH_SUMMARY':          70,
         'MSP_DATAFLASH_READ':             71,
         'MSP_DATAFLASH_ERASE':            72,
@@ -1847,29 +1847,31 @@ class MSPy:
             self.ARMING_CONFIG['small_angle'] = self.readbytes(data, size=8, unsigned=True)
 
     def process_MSP_LOOP_TIME(self, data):
-        self.FC_CONFIG['loopTime'] = self.readbytes(data, size=16, unsigned=True)
+        if self.INAV:
+            self.FC_CONFIG['loopTime'] = self.readbytes(data, size=16, unsigned=True)
 
     def process_MSP_MISC(self, data): # 22 bytes
-        self.MISC['midrc'] = self.RX_CONFIG['midrc'] = self.readbytes(data, size=16, unsigned=True)
-        self.MISC['minthrottle'] = self.MOTOR_CONFIG['minthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
-        self.MISC['maxthrottle'] = self.MOTOR_CONFIG['maxthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
-        self.MISC['mincommand'] = self.MOTOR_CONFIG['mincommand'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
-        self.MISC['failsafe_throttle'] = self.readbytes(data, size=16, unsigned=True) # 1000-2000
-        self.MISC['gps_type'] = self.GPS_CONFIG['provider'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['sensors_baudrate'] = self.MISC['gps_baudrate'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['gps_ubx_sbas'] = self.GPS_CONFIG['ublox_sbas'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['multiwiicurrentoutput'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['rssi_channel'] = self.RSSI_CONFIG['channel'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['placeholder2'] = self.readbytes(data, size=8, unsigned=True)
-
-        self.COMPASS_CONFIG['mag_declination'] = self.readbytes(data, size=16, unsigned=False) / 100 # -18000-18000
         if self.INAV:
+            self.MISC['midrc'] = self.RX_CONFIG['midrc'] = self.readbytes(data, size=16, unsigned=True)
+            self.MISC['minthrottle'] = self.MOTOR_CONFIG['minthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
+            self.MISC['maxthrottle'] = self.MOTOR_CONFIG['maxthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
+            self.MISC['mincommand'] = self.MOTOR_CONFIG['mincommand'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
+            self.MISC['failsafe_throttle'] = self.readbytes(data, size=16, unsigned=True) # 1000-2000
+            self.MISC['gps_type'] = self.GPS_CONFIG['provider'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['sensors_baudrate'] = self.MISC['gps_baudrate'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['gps_ubx_sbas'] = self.GPS_CONFIG['ublox_sbas'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['multiwiicurrentoutput'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['rssi_channel'] = self.RSSI_CONFIG['channel'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['placeholder2'] = self.readbytes(data, size=8, unsigned=True)
+
+            self.COMPASS_CONFIG['mag_declination'] = self.readbytes(data, size=16, unsigned=False) / 100 # -18000-18000
+            
             self.MISC['mag_declination'] = self.COMPASS_CONFIG['mag_declination']*10
 
-        self.MISC['vbatscale'] = self.readbytes(data, size=8, unsigned=True) # 10-200
-        self.MISC['vbatmincellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
-        self.MISC['vbatmaxcellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
-        self.MISC['vbatwarningcellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
+            self.MISC['vbatscale'] = self.readbytes(data, size=8, unsigned=True) # 10-200
+            self.MISC['vbatmincellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
+            self.MISC['vbatmaxcellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
+            self.MISC['vbatwarningcellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
 
     def process_MSPV2_INAV_MISC(self, data):
         self.MISC['midrc'] = self.RX_CONFIG['midrc'] = self.readbytes(data, size=16, unsigned=True)
@@ -2467,30 +2469,31 @@ class MSPy:
     def process_MSP_SET_BLACKBOX_CONFIG(self, data):
         logging.info("Blackbox config saved")
 
-    def process_MSP_TRANSPONDER_CONFIG(self, data):
-        bytesRemaining = len(data)
+    # TODO: This changed and it will need to check the BF version to decode things correctly
+    # def process_MSP_TRANSPONDER_CONFIG(self, data):
+    #     bytesRemaining = len(data)
 
-        providerCount = self.readbytes(data, size=8, unsigned=True)
-        bytesRemaining-=1
+    #     providerCount = self.readbytes(data, size=8, unsigned=True)
+    #     bytesRemaining-=1
 
-        self.TRANSPONDER['supported'] = providerCount > 0
-        self.TRANSPONDER['providers'] = []
+    #     self.TRANSPONDER['supported'] = providerCount > 0
+    #     self.TRANSPONDER['providers'] = []
 
-        for i in range(providerCount):
-            provider = {
-                'id': self.readbytes(data, size=8, unsigned=True),
-                'dataLength': self.readbytes(data, size=8, unsigned=True)
-            }
-            bytesRemaining -= 2
+    #     for i in range(providerCount):
+    #         provider = {
+    #             'id': self.readbytes(data, size=8, unsigned=True),
+    #             'dataLength': self.readbytes(data, size=8, unsigned=True)
+    #         }
+    #         bytesRemaining -= 2
 
-            self.TRANSPONDER['providers'].append(provider)
+    #         self.TRANSPONDER['providers'].append(provider)
 
-        self.TRANSPONDER['provider'] = self.readbytes(data, size=8, unsigned=True)
-        bytesRemaining-=1
+    #     self.TRANSPONDER['provider'] = self.readbytes(data, size=8, unsigned=True)
+    #     bytesRemaining-=1
 
-        self.TRANSPONDER['data'] = []
-        for i in range(bytesRemaining):
-            self.TRANSPONDER['data'].append(self.readbytes(data, size=8, unsigned=True))
+    #     self.TRANSPONDER['data'] = []
+    #     for i in range(bytesRemaining):
+    #         self.TRANSPONDER['data'].append(self.readbytes(data, size=8, unsigned=True))
 
     def process_MSP_SET_TRANSPONDER_CONFIG(self, data):
         logging.info("Transponder config saved")
