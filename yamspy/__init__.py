@@ -1688,23 +1688,24 @@ class MSPy:
             self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
     
     def process_MSPV2_INAV_ANALOG(self, data):
-        tmp = self.readbytes(data, size=8, unsigned=True)
-        self.ANALOG['battery_full_when_plugged_in'] = True if (tmp & 1) else False
-        self.ANALOG['use_capacity_thresholds'] = True if ((tmp & 2) >> 1) else False
-        self.ANALOG['battery_state'] = (tmp & 12) >> 2
-        self.ANALOG['cell_count'] = (tmp & 0xF0) >> 4
+        if self.INAV:
+            tmp = self.readbytes(data, size=8, unsigned=True)
+            self.ANALOG['battery_full_when_plugged_in'] = True if (tmp & 1) else False
+            self.ANALOG['use_capacity_thresholds'] = True if ((tmp & 2) >> 1) else False
+            self.ANALOG['battery_state'] = (tmp & 12) >> 2
+            self.ANALOG['cell_count'] = (tmp & 0xF0) >> 4
 
-        self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
-        self.ANALOG['amperage'] = self.readbytes(data, size=16, unsigned=True) / 100 # A
-        self.ANALOG['power'] = self.readbytes(data, size=32, unsigned=True) / 100
-        self.ANALOG['mAhdrawn'] = self.readbytes(data, size=32, unsigned=True)
-        self.ANALOG['mWhdrawn'] = self.readbytes(data, size=32, unsigned=True)
-        self.ANALOG['battery_remaining_capacity'] = self.readbytes(data, size=32, unsigned=True)
-        self.ANALOG['battery_percentage'] = self.readbytes(data, size=8, unsigned=True)
-        self.ANALOG['rssi'] = self.readbytes(data, size=16, unsigned=True) # 0-1023
+            self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
+            self.ANALOG['amperage'] = self.readbytes(data, size=16, unsigned=True) / 100 # A
+            self.ANALOG['power'] = self.readbytes(data, size=32, unsigned=True) / 100
+            self.ANALOG['mAhdrawn'] = self.readbytes(data, size=32, unsigned=True)
+            self.ANALOG['mWhdrawn'] = self.readbytes(data, size=32, unsigned=True)
+            self.ANALOG['battery_remaining_capacity'] = self.readbytes(data, size=32, unsigned=True)
+            self.ANALOG['battery_percentage'] = self.readbytes(data, size=8, unsigned=True)
+            self.ANALOG['rssi'] = self.readbytes(data, size=16, unsigned=True) # 0-1023
 
-        # TODO: update both BF and INAV variables
-        self.BATTERY_STATE['cellCount'] = self.ANALOG['cell_count']
+            # TODO: update both BF and INAV variables
+            self.BATTERY_STATE['cellCount'] = self.ANALOG['cell_count']
 
     def process_MSP_VOLTAGE_METERS(self, data):
         total_bytes_per_meter = (8+8)/8 # just to make it clear where it comes from...
@@ -1874,28 +1875,29 @@ class MSPy:
             self.MISC['vbatwarningcellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
 
     def process_MSPV2_INAV_MISC(self, data):
-        self.MISC['midrc'] = self.RX_CONFIG['midrc'] = self.readbytes(data, size=16, unsigned=True)
-        self.MISC['minthrottle'] = self.MOTOR_CONFIG['minthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
-        self.MISC['maxthrottle'] = self.MOTOR_CONFIG['maxthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
-        self.MISC['mincommand'] = self.MOTOR_CONFIG['mincommand'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
-        self.MISC['failsafe_throttle'] = self.readbytes(data, size=16, unsigned=True) # 1000-2000
-        self.MISC['gps_type'] = self.GPS_CONFIG['provider'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['sensors_baudrate'] = self.MISC['gps_baudrate'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['gps_ubx_sbas'] = self.GPS_CONFIG['ublox_sbas'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['rssi_channel'] = self.RSSI_CONFIG['channel'] = self.readbytes(data, size=8, unsigned=True)
+        if self.INAV:
+            self.MISC['midrc'] = self.RX_CONFIG['midrc'] = self.readbytes(data, size=16, unsigned=True)
+            self.MISC['minthrottle'] = self.MOTOR_CONFIG['minthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
+            self.MISC['maxthrottle'] = self.MOTOR_CONFIG['maxthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
+            self.MISC['mincommand'] = self.MOTOR_CONFIG['mincommand'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
+            self.MISC['failsafe_throttle'] = self.readbytes(data, size=16, unsigned=True) # 1000-2000
+            self.MISC['gps_type'] = self.GPS_CONFIG['provider'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['sensors_baudrate'] = self.MISC['gps_baudrate'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['gps_ubx_sbas'] = self.GPS_CONFIG['ublox_sbas'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['rssi_channel'] = self.RSSI_CONFIG['channel'] = self.readbytes(data, size=8, unsigned=True)
 
-        self.MISC['mag_declination'] = self.readbytes(data, size=16, unsigned=False) / 10 # -18000-18000
-        self.MISC['vbatscale'] = self.readbytes(data, size=16, unsigned=True)
-        self.MISC['voltage_source'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['battery_cells'] = self.readbytes(data, size=8, unsigned=True)
-        self.MISC['vbatdetectcellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
-        self.MISC['vbatmincellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
-        self.MISC['vbatmaxcellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
-        self.MISC['vbatwarningcellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
-        self.MISC['battery_capacity'] = self.readbytes(data, size=32, unsigned=True)
-        self.MISC['battery_capacity_warning'] = self.readbytes(data, size=32, unsigned=True)
-        self.MISC['battery_capacity_critical'] = self.readbytes(data, size=32, unsigned=True)
-        self.MISC['battery_capacity_unit'] = 'mWh' if self.readbytes(data, size=8, unsigned=True) else 'mAh'
+            self.MISC['mag_declination'] = self.readbytes(data, size=16, unsigned=False) / 10 # -18000-18000
+            self.MISC['vbatscale'] = self.readbytes(data, size=16, unsigned=True)
+            self.MISC['voltage_source'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['battery_cells'] = self.readbytes(data, size=8, unsigned=True)
+            self.MISC['vbatdetectcellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
+            self.MISC['vbatmincellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
+            self.MISC['vbatmaxcellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
+            self.MISC['vbatwarningcellvoltage'] = self.readbytes(data, size=16, unsigned=True) / 100
+            self.MISC['battery_capacity'] = self.readbytes(data, size=32, unsigned=True)
+            self.MISC['battery_capacity_warning'] = self.readbytes(data, size=32, unsigned=True)
+            self.MISC['battery_capacity_critical'] = self.readbytes(data, size=32, unsigned=True)
+            self.MISC['battery_capacity_unit'] = 'mWh' if self.readbytes(data, size=8, unsigned=True) else 'mAh'
 
     def process_MSP_MOTOR_CONFIG(self, data):
         self.MOTOR_CONFIG['minthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000
