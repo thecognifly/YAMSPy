@@ -42,6 +42,7 @@ from yamspy import MSPy
 serial_port = "/dev/ttyS0"
 
 with MSPy(device=serial_port, loglevel='DEBUG', baudrate=115200) as board:
+    assert board == 1, "There's something wrong with the serial connection... check the logfile!"
     # Read info from the FC
     # Please, pay attention to the way it works:
     # 1. Message is sent: MSP_ALTITUDE without any payload (data=[])

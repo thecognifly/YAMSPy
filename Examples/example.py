@@ -37,7 +37,7 @@ This simple example will send all possible MSP commands, but the ones from avoid
 """
 
 # This list has commands that may cause havok... 
-# I may have missed something, so were warned ;)
+# I may have missed something, so you were warned ;)
 avoid_list = ['MSP_DATAFLASH_ERASE','MSP_DATAFLASH_READ','MSP_EEPROM_WRITE']
 
 #
