@@ -1560,12 +1560,16 @@ class MSPy:
             if (not dataHandler['unsupported']):
                 processor = MSPy.__dict__.get("process_" + MSPy.MSPCodes2Str[code])
                 if processor: # if nothing is found, should be None
-                    processor(self,data) # use it..
+                    try:
+                        processor(self,data) # use it..
+                    except IndexError as err:
+                        logging.warning('Received data processing error: {}'.format(err))
+                        result = 1
                 else:
-                    logging.info('Unknown code received: {}'.format(code))
+                    logging.warning('Unknown code received: {}'.format(code))
                     result = 1
             else:
-                logging.info('FC reports unsupported message error - Code {}'.format(code))
+                logging.warning('FC reports unsupported message error - Code {}'.format(code))
                 result = 1
         elif (not dataHandler['crcError']):
             logging.warning("dataHandler has a crcError.")
