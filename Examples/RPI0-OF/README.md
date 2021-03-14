@@ -5,3 +5,7 @@ This directory has some example code on autonomous flight using a RPI Zero W, a 
 - Improve documentation.
 - Clean the code.
 - Change the low level control from the RPI to the flight controller: send optical flow and altitude values (rangefinder) to be read directly by the flight controller as the [Matek Optical Flow and Lidar sensor](http://www.mateksys.com/?portfolio=3901-l0x) does (MSP).
+
+
+
+This code was strongly inspired by many online sources (e.g. [PiDrone](https://github.com/h2r/pidrone_pkg) and [piDrone](https://github.com/PiStuffing/Quadcopter)).
