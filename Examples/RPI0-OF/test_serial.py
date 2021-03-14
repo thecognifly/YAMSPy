@@ -3,7 +3,7 @@ import signal
 from collections import deque
 import numpy as np
 from multiprocessing import Process, Pipe
-from betaflightmspy import MSPy
+from yamspy import MSPy
 import os
 
 DEBUG = True
