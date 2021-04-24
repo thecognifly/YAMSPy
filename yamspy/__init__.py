@@ -76,6 +76,8 @@ class MSPy:
         'MSP_NAME':                       10,
         'MSP_SET_NAME':                   11,
 
+        'MSP_MOCAP':                      30,
+
         'MSP_BATTERY_CONFIG':             32,
         'MSP_SET_BATTERY_CONFIG':         33,
         'MSP_MODE_RANGES':                34,
