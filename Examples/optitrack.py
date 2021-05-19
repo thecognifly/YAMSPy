@@ -7,7 +7,7 @@ from yamspy import MSPy
 serial_port = "/dev/ttyACM0"
 
 with MSPy(device=serial_port, logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG') as board:
-    test_mocap = [1,2,3,4,5]
+    test_mocap = [0, 20, 30, 40, 0]
     data = board.convert(test_mocap, 16)
 
     try:
@@ -21,7 +21,7 @@ with MSPy(device=serial_port, logfilename='MSPy.log', logfilemode='a', loglevel=
                 elif dataHandler['packet_error'] == 1:
                     print('Received >>> ERROR!')
             time.sleep(.1)
-            print(f"Debug content: {board.SENSOR_DATA['debug']}")
+            print(f"Debug content: {board.SENSOR_DATA['debug']}") # debug should be set to MOCAP for this script to work...
             if board.send_RAW_msg(MSPy.MSPCodes['MSP_DEBUG'], data=[]):
                 dataHandler = board.receive_msg()
                 codestr = MSPy.MSPCodes2Str.get(dataHandler['code'])
@@ -31,7 +31,7 @@ with MSPy(device=serial_port, logfilename='MSPy.log', logfilemode='a', loglevel=
                     print(f"Debug content: {board.SENSOR_DATA['debug']}")
                 elif dataHandler['packet_error'] == 1:
                     print('Received >>> ERROR!')
-            test_mocap = [i+1 for i in test_mocap]
+            test_mocap[0] = test_mocap[0]+1 # it will reject the message if this values is not incremented
             data = board.convert(test_mocap, 16)
 
     except KeyboardInterrupt:
