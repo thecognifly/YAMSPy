@@ -61,7 +61,8 @@ else:
 import serial # pyserial version???
 
 MSGLEN = 4096 # Change this to a input later ?
-
+myPORT = 5761 # Take this as input ?
+myHOST = '127.0.0.1' # Take this as input ?
 class MySocket:
     """demonstration class only
       - coded for clarity, not efficiency
@@ -895,8 +896,7 @@ class MSPy:
         #                           exclusive=None)
 
            
-        myPORT = 5761 # Take this as input ?
-        myHOST = '127.0.0.1' # Take this as input ?
+
         mysocket = MySocket()
         if use_tcp is False: 
 
@@ -915,11 +915,11 @@ class MSPy:
             self.read = self.conn.read
         
         else :
-            self.conn = mysocket
-            mysocket.connect(myHOST,myPORT)        
+            self.conn = mysocket        
             self.write = self.conn.mysend
-            self.read = lambda : self.conn.myrecv(1)
+            self.read = lambda : self.conn.myreceive()
 
+        self.use_tcp = use_tcp
 
         self.ser_trials = trials
 
@@ -960,7 +960,10 @@ class MSPy:
 
         for _ in range(trials):
             try:
-                self.conn.open()
+                if self.use_tcp : 
+                    self.conn.connect(myHOST, myPORT)
+                else :
+                    self.conn.open()
                 self.basic_info()
                 return 0
                 
