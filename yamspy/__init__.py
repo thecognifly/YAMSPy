@@ -47,6 +47,8 @@ import logging
 import struct
 import time
 import sys
+import socket # version ? safe to import directly ?
+
 from threading import Lock
 
 if "linux" in sys.platform:
@@ -58,6 +60,43 @@ else:
 
 import serial # pyserial version???
 
+MSGLEN = 4096 # Change this to a input later ?
+
+class MySocket:
+    """demonstration class only
+      - coded for clarity, not efficiency
+    """
+
+    def __init__(self, sock=None):
+        if sock is None:
+            self.sock = socket.socket(
+                            socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            self.sock = sock
+
+    def connect(self, host, port):
+        self.sock.connect((host, port))
+
+    def mysend(self, msg):
+        totalsent = 0
+        while totalsent < MSGLEN:
+            sent = self.sock.send(msg[totalsent:])
+            if sent == 0:
+                raise RuntimeError("socket connection broken")
+            totalsent = totalsent + sent
+
+    def myreceive(self):
+        chunks = []
+        bytes_recd = 0
+        while bytes_recd < MSGLEN:
+            chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
+            # print("received " + str(chunk))
+            if chunk == b'':
+                # pass
+                raise RuntimeError("socket connection broken")
+            chunks.append(chunk)
+            bytes_recd = bytes_recd + len(chunk)
+        return b''.join(chunks)
 class MSPy:
 
     # Dictionary with all the possible codes
@@ -299,7 +338,7 @@ class MSPy:
     JUMBO_FRAME_SIZE_LIMIT = 255
 
     def __init__(self, device, baudrate=115200, trials=1, 
-                 logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG'):
+                 logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG', use_tcp = False):
         """
         Parameters
         ----------
@@ -855,23 +894,37 @@ class MSPy:
         #                           inter_byte_timeout=None,
         #                           exclusive=None)
 
-        self.conn = serial.Serial()
-        self.conn.port = device
-        self.conn.baudrate = baudrate
-        self.conn.bytesize = serial.EIGHTBITS
-        self.conn.parity = serial.PARITY_NONE
-        self.conn.stopbits = serial.STOPBITS_ONE
-        self.conn.timeout = 1
-        self.conn.xonxoff = False
-        self.conn.rtscts = False
-        self.conn.dsrdtr = False
-        self.conn.writeTimeout = 1
+           
+        myPORT = 5761 # Take this as input ?
+        myHOST = '127.0.0.1' # Take this as input ?
+        mysocket = MySocket()
+        if use_tcp is False: 
+
+            self.conn = serial.Serial()
+            self.conn.port = device
+            self.conn.baudrate = baudrate
+            self.conn.bytesize = serial.EIGHTBITS
+            self.conn.parity = serial.PARITY_NONE
+            self.conn.stopbits = serial.STOPBITS_ONE
+            self.conn.timeout = 1
+            self.conn.xonxoff = False
+            self.conn.rtscts = False
+            self.conn.dsrdtr = False
+            self.conn.writeTimeout = 1
+            self.write = self.conn.write
+            self.read = self.conn.read
+        
+        else :
+            self.conn = mysocket
+            mysocket.connect(myHOST,myPORT)        
+            self.write = self.conn.mysend
+            self.read = lambda : self.conn.myrecv(1)
+
 
         self.ser_trials = trials
 
         self.serial_port_write_lock = Lock()
         self.serial_port_read_lock = Lock()
-
 
     def __enter__(self):
         self.is_serial_open = not self.connect(trials=self.ser_trials)
@@ -1066,7 +1119,8 @@ class MSPy:
             data received
         """
         with self.serial_port_read_lock: # It's necessary to lock everything because order is important
-            local_read = self.conn.read
+            # local_read = self.conn.read
+            local_read = self.read
             while True:
                 msg_header = local_read()
                 if msg_header:
@@ -1090,7 +1144,8 @@ class MSPy:
         received_bytes = self.receive_raw_msg(3)
         dataHandler['last_received_timestamp'] = time.time()
 
-        local_read = self.conn.read
+        # local_read = self.conn.read
+        local_read = self.read
         with self.serial_port_read_lock: # It's necessary to lock everything because order is important
             di = 0
             while True:
@@ -1513,7 +1568,8 @@ class MSPy:
 
         if self.serial_port_write_lock.acquire(blocking, timeout):
             try:
-                res = self.conn.write(bufView)
+                # res = self.conn.write(bufView)
+                res = self.write(bufView)
             finally:
                 self.serial_port_write_lock.release()
                 if res>0:
