@@ -89,11 +89,13 @@ class MySocket:
     def myreceive(self):
         chunks = []
         bytes_recd = 0
+        itr = 0
         while bytes_recd < MSGLEN:
+            print("Iteration :", str(itr))
+            itr = itr + 1
             chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
-            # print("received " + str(chunk))
+            print("received " + str(chunk.decode("utf-8")))
             if chunk == b'':
-                # pass
                 raise RuntimeError("socket connection broken")
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
@@ -917,7 +919,7 @@ class MSPy:
         else :
             self.conn = mysocket        
             self.write = self.conn.mysend
-            self.read = lambda : self.conn.myreceive()
+            self.read = self.conn.myreceive
 
         self.use_tcp = use_tcp
 
@@ -925,7 +927,7 @@ class MSPy:
 
         self.serial_port_write_lock = Lock()
         self.serial_port_read_lock = Lock()
-
+        
     def __enter__(self):
         self.is_serial_open = not self.connect(trials=self.ser_trials)
 
@@ -1129,9 +1131,10 @@ class MSPy:
                 if msg_header:
                     if ord(msg_header) == 36: # $
                         break
-
-            msg = local_read(size - 1) # -1 to compensate for the $
-            return msg_header + msg
+        # self.serial_port_read_lock.acquire()
+        msg = local_read(size - 1) # -1 to compensate for the $
+        # self.serial_port_read_lock.release()
+        return msg_header + msg
 
     def receive_msg(self):
         """Receive an MSP message from the serial port
@@ -1148,7 +1151,9 @@ class MSPy:
         dataHandler['last_received_timestamp'] = time.time()
 
         # local_read = self.conn.read
+        # self.serial_port_read_lock.acquire()
         local_read = self.read
+        # self.serial_port_read_lock.release()
         with self.serial_port_read_lock: # It's necessary to lock everything because order is important
             di = 0
             while True:
