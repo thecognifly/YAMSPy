@@ -60,7 +60,7 @@ else:
 
 import serial # pyserial version???
 
-MSGLEN = 4096 # Change this to a input later ?
+MSGLEN = 1024 # Change this to a input later ?
 myPORT = 5761 # Take this as input ?
 myHOST = '127.0.0.1' # Take this as input ?
 class MySocket:
@@ -68,15 +68,23 @@ class MySocket:
       - coded for clarity, not efficiency
     """
 
+    def close(self):
+        if not self.sock:
+            raise Exception("Cannot close, socket never created")
+        self.closed = True
+        self.sock.close()
+
     def __init__(self, sock=None):
         if sock is None:
             self.sock = socket.socket(
                             socket.AF_INET, socket.SOCK_STREAM)
         else:
             self.sock = sock
+        self.closed = False
 
     def connect(self, host, port):
         self.sock.connect((host, port))
+        self.closed = False
 
     def mysend(self, msg):
         totalsent = 0
@@ -84,7 +92,34 @@ class MySocket:
             sent = self.sock.send(msg[totalsent:])
             if sent == 0:
                 raise RuntimeError("socket connection broken")
+            else:
+                print("sent : " + msg[totalsent:])
             totalsent = totalsent + sent
+
+    # parse function from https://github.com/ad1tyat/pyMultiWii not sure if it works
+    def _parse_payload(self, payload):
+        """ parse packet payload and return fields throw exception is parsing error """
+
+        # Check for preamble
+        # print(payload[:2])
+        if payload[:2] != b'$M':
+            raise Exception("Preable not found")
+
+        # Check direction, indexing bytesarray returns int
+        direction = payload[2]
+        if not (direction == ord('>') or direction == ord('<')):
+            raise Exception("Direction not found")
+
+        datalength = payload[3]
+        print("len={}".format(datalength))
+        command = payload[4]
+        print("CMD={}".format(command))
+        data = payload[5 : 5 + datalength] 
+        print("Data={}".format(data))
+        crc = payload[5 + datalength]
+        print("CRC={}".format(crc))
+
+        return (direction, datalength, command, data, crc)
 
     def myreceive(self):
         chunks = []
@@ -93,8 +128,10 @@ class MySocket:
         while bytes_recd < MSGLEN:
             print("Iteration :", str(itr))
             itr = itr + 1
-            chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
-            print("received " + str(chunk.decode("utf-8")))
+            # chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
+            chunk = self.sock.recv(1024)
+            print(self._parse_payload(chunk))
+            # print("received " + str(chunk.decode("utf-8")))
             if chunk == b'':
                 raise RuntimeError("socket connection broken")
             chunks.append(chunk)
@@ -966,7 +1003,7 @@ class MSPy:
                     self.conn.connect(myHOST, myPORT)
                 else :
                     self.conn.open()
-                self.basic_info()
+                # self.basic_info()
                 return 0
                 
             except serial.SerialException as err:
@@ -1114,8 +1151,8 @@ class MSPy:
             # will return a code 200. However, the message is always empty (data_length = 0).
             _ = self.receive_raw_msg(size = 6)
 
-        
-    def receive_raw_msg(self, size):
+    # Added a default sixe of 0
+    def receive_raw_msg(self, size = 0):
         """Receive multiple bytes at once when it's not a jumbo frame.
 
         Returns
@@ -1147,7 +1184,9 @@ class MSPy:
         """
 
         dataHandler = self.dataHandler_init.copy()
-        received_bytes = self.receive_raw_msg(3)
+        # received_bytes = self.receive_raw_msg(3)
+        # changed 3 to 0. why ?  
+        received_bytes = self.receive_raw_msg()
         dataHandler['last_received_timestamp'] = time.time()
 
         # local_read = self.conn.read
@@ -1577,8 +1616,10 @@ class MSPy:
         if self.serial_port_write_lock.acquire(blocking, timeout):
             try:
                 # res = self.conn.write(bufView)
+                print("trying")
                 res = self.write(bufView)
             finally:
+                print("finally")
                 self.serial_port_write_lock.release()
                 if res>0:
                     logging.debug("RAW message sent: {}".format(bufView))
