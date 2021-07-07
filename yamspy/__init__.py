@@ -60,7 +60,7 @@ else:
 
 import serial # pyserial version???
 
-MSGLEN = 1024 # Change this to a input later ?
+# MSGLEN = 1024 # Change this to a input later ?
 myPORT = 5761 # Take this as input ?
 myHOST = '127.0.0.1' # Take this as input ?
 class MySocket:
@@ -88,13 +88,17 @@ class MySocket:
 
     def mysend(self, msg):
         totalsent = 0
-        while totalsent < MSGLEN:
-            sent = self.sock.send(msg[totalsent:])
-            if sent == 0:
-                raise RuntimeError("socket connection broken")
-            else:
-                print("sent : " + msg[totalsent:])
-            totalsent = totalsent + sent
+        # MSGLEN = 1024
+        sent = self.sock.send(msg)
+        # while totalsent < MSGLEN:
+        #     sent = self.sock.send(msg[totalsent:])
+        if sent == 0:
+            raise RuntimeError("socket connection broken")
+        # else:
+        #         # print("sent : " + msg[totalsent:])
+        #         # print("sentlen " + str(sent))
+        #     totalsent = totalsent + sent
+        return sent
 
     # parse function from https://github.com/ad1tyat/pyMultiWii not sure if it works
     def _parse_payload(self, payload):
@@ -121,17 +125,17 @@ class MySocket:
 
         return (direction, datalength, command, data, crc)
 
-    def myreceive(self):
+    def myreceive(self, MSGLEN = 1):
         chunks = []
         bytes_recd = 0
         itr = 0
         while bytes_recd < MSGLEN:
-            print("Iteration :", str(itr))
+            # print("Iteration :", str(itr))
             itr = itr + 1
             # chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
-            chunk = self.sock.recv(1024)
-            print(self._parse_payload(chunk))
-            # print("received " + str(chunk.decode("utf-8")))
+            chunk = self.sock.recv(1)
+            # print(self._parse_payload(chunk))
+            # print("received " + str(chunk))
             if chunk == b'':
                 raise RuntimeError("socket connection broken")
             chunks.append(chunk)
@@ -1003,7 +1007,7 @@ class MSPy:
                     self.conn.connect(myHOST, myPORT)
                 else :
                     self.conn.open()
-                # self.basic_info()
+                self.basic_info()
                 return 0
                 
             except serial.SerialException as err:
@@ -1184,9 +1188,9 @@ class MSPy:
         """
 
         dataHandler = self.dataHandler_init.copy()
-        # received_bytes = self.receive_raw_msg(3)
+        received_bytes = self.receive_raw_msg(3)
         # changed 3 to 0. why ?  
-        received_bytes = self.receive_raw_msg()
+        # received_bytes = self.receive_raw_msg()
         dataHandler['last_received_timestamp'] = time.time()
 
         # local_read = self.conn.read
@@ -1612,18 +1616,20 @@ class MSPy:
             for si in range(3, size-1):
                 checksum = self._crc8_dvb_s2(checksum, bufView[si])
             bufView[-1] = checksum
-
+        # print(bufView)
         if self.serial_port_write_lock.acquire(blocking, timeout):
             try:
                 # res = self.conn.write(bufView)
-                print("trying")
+                # print("trying")
                 res = self.write(bufView)
             finally:
-                print("finally")
+                # print("res : " + str(res))
+                # print("finally")
                 self.serial_port_write_lock.release()
                 if res>0:
+                    # print()
+                    # print("RAW message sent: {}".format(bufView))
                     logging.debug("RAW message sent: {}".format(bufView))
-
                 return res
     
     @staticmethod
