@@ -38,7 +38,7 @@ __author__ = "Ricardo de Azambuja"
 __copyright__ = "Copyright 2019, MISTLab.ca"
 __credits__ = [""]
 __license__ = "GPL"
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 __maintainer__ = "Ricardo de Azambuja"
 __email__ = "ricardo.azambuja@gmail.com"
 __status__ = "Development"
@@ -47,7 +47,7 @@ import logging
 import struct
 import time
 import sys
-import socket # version ? safe to import directly ?
+from serial import SerialException
 
 from threading import Lock
 
@@ -58,89 +58,6 @@ else:
     def ffs(x): # modified from https://stackoverflow.com/a/36059264
         return (x&-x).bit_length()
 
-import serial # pyserial version???
-
-# MSGLEN = 1024 # Change this to a input later ?
-myPORT = 5761 # Take this as input ?
-myHOST = '127.0.0.1' # Take this as input ?
-class MySocket:
-    """demonstration class only
-      - coded for clarity, not efficiency
-    """
-
-    def close(self):
-        if not self.sock:
-            raise Exception("Cannot close, socket never created")
-        self.closed = True
-        self.sock.close()
-
-    def __init__(self, sock=None):
-        if sock is None:
-            self.sock = socket.socket(
-                            socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            self.sock = sock
-        self.closed = False
-
-    def connect(self, host, port):
-        self.sock.connect((host, port))
-        self.closed = False
-
-    def mysend(self, msg):
-        totalsent = 0
-        # MSGLEN = 1024
-        sent = self.sock.send(msg)
-        # while totalsent < MSGLEN:
-        #     sent = self.sock.send(msg[totalsent:])
-        if sent == 0:
-            raise RuntimeError("socket connection broken")
-        # else:
-        #         # print("sent : " + msg[totalsent:])
-        #         # print("sentlen " + str(sent))
-        #     totalsent = totalsent + sent
-        return sent
-
-    # parse function from https://github.com/ad1tyat/pyMultiWii not sure if it works
-    def _parse_payload(self, payload):
-        """ parse packet payload and return fields throw exception is parsing error """
-
-        # Check for preamble
-        # print(payload[:2])
-        if payload[:2] != b'$M':
-            raise Exception("Preable not found")
-
-        # Check direction, indexing bytesarray returns int
-        direction = payload[2]
-        if not (direction == ord('>') or direction == ord('<')):
-            raise Exception("Direction not found")
-
-        datalength = payload[3]
-        print("len={}".format(datalength))
-        command = payload[4]
-        print("CMD={}".format(command))
-        data = payload[5 : 5 + datalength] 
-        print("Data={}".format(data))
-        crc = payload[5 + datalength]
-        print("CRC={}".format(crc))
-
-        return (direction, datalength, command, data, crc)
-
-    def myreceive(self, MSGLEN = 1):
-        chunks = []
-        bytes_recd = 0
-        itr = 0
-        while bytes_recd < MSGLEN:
-            # print("Iteration :", str(itr))
-            itr = itr + 1
-            # chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
-            chunk = self.sock.recv(1)
-            # print(self._parse_payload(chunk))
-            # print("received " + str(chunk))
-            if chunk == b'':
-                raise RuntimeError("socket connection broken")
-            chunks.append(chunk)
-            bytes_recd = bytes_recd + len(chunk)
-        return b''.join(chunks)
 class MSPy:
 
     # Dictionary with all the possible codes
@@ -923,26 +840,8 @@ class MSPy:
                                 level=getattr(logging, loglevel.upper()),
                                 stream=sys.stdout)
 
-        # For some reason, passing the arguments doesn't work and
-        # the serial fails...
-        # self.conn = serial.Serial(port=device,
-        #                           baudrate=baudrate,
-        #                           bytesize=serial.EIGHTBITS,
-        #                           parity=serial.PARITY_NONE,
-        #                           stopbits=serial.STOPBITS_ONE,
-        #                           timeout=0, # 0 for non-blocking mode (read)
-        #                           xonxoff=False,
-        #                           rtscts=False,
-        #                           write_timeout=1, # it will raise serial.SerialTimeoutException
-        #                           dsrdtr=False,
-        #                           inter_byte_timeout=None,
-        #                           exclusive=None)
-
-           
-
-        mysocket = MySocket()
-        if use_tcp is False: 
-
+        if use_tcp is False:
+            import serial # pyserial
             self.conn = serial.Serial()
             self.conn.port = device
             self.conn.baudrate = baudrate
@@ -956,18 +855,40 @@ class MSPy:
             self.conn.writeTimeout = 1
             self.write = self.conn.write
             self.read = self.conn.read
+            self.conn.start = self.conn.open
+            # For some reason, passing the arguments doesn't work and
+            # the serial fails...
+            # self.conn = serial.Serial(port=device,
+            #                           baudrate=baudrate,
+            #                           bytesize=serial.EIGHTBITS,
+            #                           parity=serial.PARITY_NONE,
+            #                           stopbits=serial.STOPBITS_ONE,
+            #                           timeout=0, # 0 for non-blocking mode (read)
+            #                           xonxoff=False,
+            #                           rtscts=False,
+            #                           write_timeout=1, # it will raise serial.SerialTimeoutException
+            #                           dsrdtr=False,
+            #                           inter_byte_timeout=None,
+            #                           exclusive=None)
+
         
         else :
-            self.conn = mysocket        
-            self.write = self.conn.mysend
-            self.read = self.conn.myreceive
+            from .tcp_conn import TCPSocket
+            socket = TCPSocket()
+            self.conn = socket        
+            self.write = self.conn.send
+            self.read = self.conn.receive
+
+            self.conn.start = self.conn.connect
 
         self.use_tcp = use_tcp
 
         self.ser_trials = trials
 
-        self.serial_port_write_lock = Lock()
-        self.serial_port_read_lock = Lock()
+        self.port_write_lock = Lock()
+        self.port_read_lock = Lock()
+
+        self.INAV = False
         
     def __enter__(self):
         self.is_serial_open = not self.connect(trials=self.ser_trials)
@@ -1003,14 +924,11 @@ class MSPy:
 
         for _ in range(trials):
             try:
-                if self.use_tcp : 
-                    self.conn.connect(myHOST, myPORT)
-                else :
-                    self.conn.open()
+                self.conn.start()
                 self.basic_info()
                 return 0
                 
-            except serial.SerialException as err:
+            except SerialException as err:
                 logging.warning("Error opening the serial port ({0}): {1}".format(self.conn.port, err))
             
             except FileNotFoundError as err:
@@ -1031,8 +949,6 @@ class MSPy:
 
         if 'INAV' in self.CONFIG['flightControllerIdentifier']:
             self.INAV = True
-        else:
-            self.INAV = False
 
         basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 
                                'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
@@ -1164,7 +1080,7 @@ class MSPy:
         bytes
             data received
         """
-        with self.serial_port_read_lock: # It's necessary to lock everything because order is important
+        with self.port_read_lock: # It's necessary to lock everything because order is important
             # local_read = self.conn.read
             local_read = self.read
             while True:
@@ -1172,9 +1088,8 @@ class MSPy:
                 if msg_header:
                     if ord(msg_header) == 36: # $
                         break
-        # self.serial_port_read_lock.acquire()
-        msg = local_read(size - 1) # -1 to compensate for the $
-        # self.serial_port_read_lock.release()
+            msg = local_read(size - 1) # -1 to compensate for the $
+
         return msg_header + msg
 
     def receive_msg(self):
@@ -1189,15 +1104,13 @@ class MSPy:
 
         dataHandler = self.dataHandler_init.copy()
         received_bytes = self.receive_raw_msg(3)
-        # changed 3 to 0. why ?  
-        # received_bytes = self.receive_raw_msg()
+        if not received_bytes:
+            return dataHandler
+
         dataHandler['last_received_timestamp'] = time.time()
 
-        # local_read = self.conn.read
-        # self.serial_port_read_lock.acquire()
-        local_read = self.read
-        # self.serial_port_read_lock.release()
-        with self.serial_port_read_lock: # It's necessary to lock everything because order is important
+        local_read = self.read        
+        with self.port_read_lock: # It's necessary to lock everything because order is important
             di = 0
             while True:
                 try:
@@ -1617,7 +1530,7 @@ class MSPy:
                 checksum = self._crc8_dvb_s2(checksum, bufView[si])
             bufView[-1] = checksum
         # print(bufView)
-        if self.serial_port_write_lock.acquire(blocking, timeout):
+        if self.port_write_lock.acquire(blocking, timeout):
             try:
                 # res = self.conn.write(bufView)
                 # print("trying")
@@ -1625,7 +1538,7 @@ class MSPy:
             finally:
                 # print("res : " + str(res))
                 # print("finally")
-                self.serial_port_write_lock.release()
+                self.port_write_lock.release()
                 if res>0:
                     # print()
                     # print("RAW message sent: {}".format(bufView))
