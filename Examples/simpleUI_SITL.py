@@ -1,4 +1,5 @@
-"""simpleUI_SITL.py: Simple UI (toy one really) to test YAMSPy using a SSH connection.
+"""simpleUI_SITL.py: Simple UI (toy one really) to test YAMSPy using with SITL.
+Check https://github.com/ricardodeazambuja/betaflight/tree/sitl/src/main/target/SITL for more details!
 
 Copyright (C) 2020 Ricardo de Azambuja
 
