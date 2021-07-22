@@ -65,9 +65,6 @@ Screen can be as annoying as [VIM](https://stackoverflow.blog/2017/05/23/stack-o
 - ```ctrl+a and the ESC key``` to move around using the arrow keys (to stop this behaviour just press the ESC key again.
 - ```ctrl+a, then : and finally H``` to save everything printed on the screen after that point.
 
-### UART pins
-Remember the Raspberry Pi uses 3.3V while many flight controllers use 5V. Therefore, it may be necessary to use a [level shifter](https://en.wikipedia.org/wiki/Level_shifter). You can buy a [level shifter for just a few dollars](https://www.sparkfun.com/products/12009) avoiding some headaches.
-
 ## TODO:
 Currently the main library is made of a HUGE single file. That is just terrible, but I didn't have time to split it and test. So if you want to help, please, be my guest. Talking about testing, I haven't implemented any automated test besides the example files, again, be my guest ;)
 
