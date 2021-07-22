@@ -23,8 +23,8 @@ Acknowledgement:
 This work was possible thanks to the financial support from IVADO.ca (postdoctoral scholarship 2019/2020).
 
 Disclaimer (adapted from Wikipedia):
-None of the authors, contributors, supervisors, administrators, employers, friends, family, vandals, or anyone else 
-connected (or not) with this project, in any way whatsoever, can be made responsible for your use of the information (code) 
+None of the authors, contributors, supervisors, administrators, employers, friends, family, vandals, or anyone else
+connected (or not) with this project, in any way whatsoever, can be made responsible for your use of the information (code)
 contained or linked from here.
 
 TODO:
@@ -149,7 +149,7 @@ class MSPy:
         'MSP_ANALOG':                     110,
         'MSP_RC_TUNING':                  111,
         'MSP_PID':                        112,
-        #'MSP_BOX':                        113, // DEPRECATED 
+        #'MSP_BOX':                        113, // DEPRECATED
         'MSP_MISC':                       114, # DEPRECATED
         'MSP_BOXNAMES':                   116,
         'MSP_PIDNAMES':                   117,
@@ -290,7 +290,7 @@ class MSPy:
 
     JUMBO_FRAME_SIZE_LIMIT = 255
 
-    def __init__(self, device, baudrate=115200, trials=1, 
+    def __init__(self, device, baudrate=115200, trials=1,
                  logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG'):
         """
         Parameters
@@ -305,7 +305,7 @@ class MSPy:
             Name of the file where the log is saved (default is 'MSPy.log').
             If logfilename=None, it will use stdout instead of a file.
         logfilemode : str, optional
-            Use 'a' for append and 'w' for overriding (default is 'a'). 
+            Use 'a' for append and 'w' for overriding (default is 'a').
         loglevel : str, optional
             The loglevel passed to logging (default is 'DEBUG')
         """
@@ -483,7 +483,7 @@ class MSPy:
             'fpvCamAngleDegrees':           0,
             'rcSmoothingType':              0,
             'rcSmoothingInputCutoff':       0,
-            'rcSmoothingDerivativeCutoff':  0, 
+            'rcSmoothingDerivativeCutoff':  0,
             'rcSmoothingInputType':         0,
             'rcSmoothingDerivativeType':    0,
         }
@@ -824,7 +824,7 @@ class MSPy:
 
         if logfilename:
             logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
-                                filename=logfilename, 
+                                filename=logfilename,
                                 filemode=logfilemode,
                                 level=getattr(logging, loglevel.upper()))
         else:
@@ -890,7 +890,7 @@ class MSPy:
 
         delay : float
             Time between trials
-            
+
         Returns
         -------
         int
@@ -902,15 +902,15 @@ class MSPy:
                 self.conn.open()
                 self.basic_info()
                 return 0
-                
+
             except serial.SerialException as err:
                 logging.warning("Error opening the serial port ({0}): {1}".format(self.conn.port, err))
-            
+
             except FileNotFoundError as err:
                 logging.warning("Port ({0}) not found: {1}".format(self.conn.port, err))
 
             time.sleep(delay)
-        
+
         return 1
 
 
@@ -927,7 +927,7 @@ class MSPy:
         else:
             self.INAV = False
 
-        basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 
+        basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID',
                                'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
         if self.INAV:
             basic_info_cmd_list.append('MSPV2_INAV_ANALOG')
@@ -937,7 +937,7 @@ class MSPy:
             if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                 dataHandler = self.receive_msg()
                 self.process_recv_data(dataHandler)
-    
+
         print(self.CONFIG)
 
     def fast_read_altitude(self):
@@ -945,9 +945,10 @@ class MSPy:
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_ALTITUDE']):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
-            data_length = 32
+            data_length = 4
             msg = self.receive_raw_msg(size = (6+data_length))[5:]
-            converted_msg = struct.unpack('<i', msg[:-1])
+            # assert False, f"DEBUG: len(msg):{len(msg)}, msg:{msg}"
+            converted_msg = struct.unpack('<i', msg[:-1])[0]
             self.SENSOR_DATA['altitude'] = round((converted_msg / 100.0), 2) # correct scale factor
 
     def fast_read_imu(self):
@@ -998,8 +999,8 @@ class MSPy:
             self.SENSOR_DATA['kinematics'][0] = converted_msg[0] / 10.0 # x
             self.SENSOR_DATA['kinematics'][1] = converted_msg[1] / 10.0 # y
             self.SENSOR_DATA['kinematics'][2] = converted_msg[2] # z
-    
-    
+
+
     def fast_read_analog(self):
         """Request, read and process the ANALOG message
         """
@@ -1036,7 +1037,7 @@ class MSPy:
         ----------
         cmds : list
             List with RC values to be sent
-            * The number of values is 4 + number of AUX channels enabled (max 14) 
+            * The number of values is 4 + number of AUX channels enabled (max 14)
         """
         cmds = [int(cmd) for cmd in cmds]
         data = struct.pack('<%dH' % len(cmds), *cmds)
@@ -1048,7 +1049,7 @@ class MSPy:
             # will return a code 200. However, the message is always empty (data_length = 0).
             _ = self.receive_raw_msg(size = 6)
 
-        
+
     def receive_raw_msg(self, size):
         """Receive multiple bytes at once when it's not a jumbo frame.
 
@@ -1089,8 +1090,8 @@ class MSPy:
                 data = received_bytes[di]
                 di += 1
             # for data in received_bytes:
-                logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
-                                                                        dataHandler['state'], 
+                logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'],
+                                                                        dataHandler['state'],
                                                                         data))
                 # it will always fall in the first state by default
                 if dataHandler['state'] == 0: # sync char 1
@@ -1120,7 +1121,7 @@ class MSPy:
                             dataHandler['message_direction'] = 1
                         elif (data == 60): # < PC to FC
                             dataHandler['message_direction'] = 0
-                            
+
                         if dataHandler['msp_version'] == 1:
                             dataHandler['state'] = 3
                             received_bytes += local_read(2)
@@ -1129,7 +1130,7 @@ class MSPy:
                             received_bytes += local_read(5)
 
                 elif dataHandler['state'] == 2.1: # MSP V2: flag (ignored)
-                    dataHandler['flags'] = data # 4th byte 
+                    dataHandler['flags'] = data # 4th byte
                     dataHandler['state'] = 2.2
 
                 elif dataHandler['state'] == 2.2: # MSP V2: code LOW
@@ -1236,7 +1237,7 @@ class MSPy:
                                 return dataHandler
                             else:
                                 # wrong checksum
-                                logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
+                                logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'],
                                                                                                             data,
                                                                                                             dataHandler['message_checksum']))
                                 dataHandler['crcError'] = True
@@ -1257,7 +1258,7 @@ class MSPy:
                                 return dataHandler
                             else:
                                 # wrong checksum
-                                logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
+                                logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'],
                                                                                                             data,
                                                                                                             dataHandler['message_checksum']))
                                 dataHandler['crcError'] = True
@@ -1284,7 +1285,7 @@ class MSPy:
             Indicates if data is unsigned or not (default is False)
         read_as_float: bool, optional
             Indicates if data is read as float or not (default is False)
-            
+
         Returns
         -------
         int
@@ -1294,20 +1295,20 @@ class MSPy:
 
         for _ in range(int(size/8)):
             buffer.append(data.pop(0))
-        
+
         if size==8:
             unpack_format = 'b'
         elif size==16:
             if read_as_float: # for special situations like MSP2_INAV_DEBUG
                 unpack_format = 'e'
-            else:   
+            else:
                 unpack_format = 'h'
         elif size==32:
             if read_as_float: # for special situations like MSP2_INAV_DEBUG
                 unpack_format = 'f'
             else:
                 unpack_format = 'i'
-        
+
         if unsigned:
             unpack_format = unpack_format.upper()
 
@@ -1354,27 +1355,27 @@ class MSPy:
 
 
     @staticmethod
-    def convert(val_list, n=16): 
+    def convert(val_list, n=16):
         """Convert to n*bits (8 multiple) list
 
         Parameters
         ----------
         val_list : list
             List with values to be converted
-        
+
         n: int, optional
             Number of bits (multiple of 8) (default is 16)
-            
+
         Returns
         -------
         list
             List where each item is the equivalent byte value
-        """ 
+        """
         buffer = []
         for val in val_list:
-            for i in range(int(n/8)): 
-                buffer.append((int(val)>>i*8) & 255) 
-        return buffer 
+            for i in range(int(n/8)):
+                buffer.append((int(val)>>i*8) & 255)
+        return buffer
 
     def save2eprom(self):
         logging.info("Save to EPROM requested") # some configs also need reboot to be applied (not online).
@@ -1388,7 +1389,7 @@ class MSPy:
 
     def set_ARMING_DISABLE(self, armingDisabled=0, runawayTakeoffPreventionDisabled=0):
         """Disable Arming or runaway takeoff prevention
-        
+
         runawayTakeoffPreventionDisabled will be ignored if armingDisabled is true
         https://github.com/betaflight/betaflight/wiki/Runaway-Takeoff-Prevention
         """
@@ -1444,10 +1445,10 @@ class MSPy:
         ----------
         code : int
             MSP Code
-        
+
         data: list or bytearray, optional
             Data to be sent (default is [])
-            
+
         Returns
         -------
         int
@@ -1483,7 +1484,7 @@ class MSPy:
             size = len_data + 9
             checksum = 0
             bufView = bytearray([0]*size)
-            bufView[0] = 36 #$ 
+            bufView[0] = 36 #$
             bufView[1] = 88 #X
             bufView[2] = 60 #<
             bufView[3] = 0 #flag: reserved, set to 0
@@ -1506,7 +1507,7 @@ class MSPy:
                     logging.debug("RAW message sent: {}".format(bufView))
 
                 return res
-    
+
     @staticmethod
     def _crc8_dvb_s2(crc, ch):
         """CRC for MSPV2
@@ -1528,7 +1529,7 @@ class MSPy:
         ----------
         dataHandler : dict
             Dictionary generated by receive_msg
-            
+
         Returns
         -------
         int
@@ -1556,7 +1557,7 @@ class MSPy:
         else:
             logging.warning("dataHandler has a crcError.")
             result = 1
-        
+
         return result
 
     def process_MSP_STATUS(self, data):
@@ -1565,7 +1566,7 @@ class MSPy:
         self.CONFIG['activeSensors'] = self.readbytes(data, size=16, unsigned=True)
         self.CONFIG['mode'] = self.readbytes(data, size=32, unsigned=True)
         self.CONFIG['profile'] = self.readbytes(data, size=8, unsigned=True)
-        
+
     def process_MSP_STATUS_EX(self, data):
         self.CONFIG['cycleTime'] = self.readbytes(data, size=16, unsigned=True)
         self.CONFIG['i2cError'] = self.readbytes(data, size=16, unsigned=True)
@@ -1574,7 +1575,7 @@ class MSPy:
 
         self.CONFIG['profile'] = self.readbytes(data, size=8, unsigned=True)
         self.CONFIG['cpuload'] = self.readbytes(data, size=16, unsigned=True)
-        
+
         if not self.INAV:
             self.CONFIG['numProfiles'] = self.readbytes(data, size=8, unsigned=True)
             self.CONFIG['rateProfile'] = self.readbytes(data, size=8, unsigned=True)
@@ -1669,7 +1670,7 @@ class MSPy:
         self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
         if not self.INAV:
             self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
-    
+
     def process_MSPV2_INAV_ANALOG(self, data):
         tmp = self.readbytes(data, size=8, unsigned=True)
         self.ANALOG['battery_full_when_plugged_in'] = True if (tmp & 1) else False
@@ -1811,7 +1812,7 @@ class MSPy:
         self.PIDs = [
             [
                 self.readbytes(data, size=8, unsigned=True) for _ in range(3)
-            ] 
+            ]
             for _ in range(int(len(data)/3))
         ]
 
@@ -1819,7 +1820,7 @@ class MSPy:
         self.PIDs = [
             [
                 self.readbytes(data, size=8, unsigned=True) for _ in range(4)
-            ] 
+            ]
             for _ in range(int(len(data)/4))
         ]
 
@@ -1894,7 +1895,7 @@ class MSPy:
     def process_MSP_GPS_CONFIG(self, data):
         self.GPS_CONFIG['provider'] = self.readbytes(data, size=8, unsigned=True)
         self.GPS_CONFIG['ublox_sbas'] = self.readbytes(data, size=8, unsigned=True)
-        
+
         self.GPS_CONFIG['auto_config'] = self.readbytes(data, size=8, unsigned=True)
         self.GPS_CONFIG['auto_baud'] = self.readbytes(data, size=8, unsigned=True)
 
@@ -2035,7 +2036,7 @@ class MSPy:
 
     def process_MSP_SET_VOLTAGE_METER_CONFIG(self, data):
         logging.info('Voltage config saved')
-        
+
     def process_MSP_DEBUG(self, data):
         for i in range(4):
             self.SENSOR_DATA['debug'][i] = self.readbytes(data, size=16, unsigned=False)
@@ -2050,7 +2051,7 @@ class MSPy:
     def process_MSP_UID(self, data):
         for i in range(3):
             self.CONFIG['uid'][i] = self.readbytes(data, size=32, unsigned=True)
-    
+
     def process_MSP_ACC_TRIM(self, data):
         self.CONFIG['accelerometerTrims'][0] = self.readbytes(data, size=16, unsigned=False) # pitch
         self.CONFIG['accelerometerTrims'][1] = self.readbytes(data, size=16, unsigned=False) # roll
@@ -2076,10 +2077,10 @@ class MSPy:
 
     def process_MSP_SET_RX_MAP(self, data):
         logging.debug('RCMAP saved')
-        
+
     def process_MSP_MIXER_CONFIG(self, data):
         self.MIXER_CONFIG['mixer'] = self.readbytes(data, size=8, unsigned=True)
-        if not self.INAV:                    
+        if not self.INAV:
             self.MIXER_CONFIG['reverseMotorDir'] = self.readbytes(data, size=8, unsigned=True)
 
     def process_MSP_FEATURE_CONFIG(self, data):
@@ -2093,7 +2094,7 @@ class MSPy:
 
     def process_MSP_BEEPER_CONFIG(self, data):
         self.BEEPER_CONFIG['beepers'] = self.readbytes(data, size=32, unsigned=True)
-            
+
         self.BEEPER_CONFIG['dshotBeaconTone'] = self.readbytes(data, size=8, unsigned=True)
 
         self.BEEPER_CONFIG['dshotBeaconConditions'] = self.readbytes(data, size=32, unsigned=True)
@@ -2132,7 +2133,7 @@ class MSPy:
         buff = []
         for i in range(dateLength):
             buff.append(self.readbytes(data, size=8, unsigned=True))
-        
+
         buff.append(32) # ascii space
 
         timeLength = 8
@@ -2156,7 +2157,7 @@ class MSPy:
         self.CONFIG['commCapabilities'] = self.readbytes(data, size=8, unsigned=True)
 
         length = self.readbytes(data, size=8, unsigned=True)
-        
+
         for i in range(length):
             self.CONFIG['targetName'] += chr(self.readbytes(data, size=8, unsigned=True))
 
@@ -2182,7 +2183,7 @@ class MSPy:
 
     def process_MSP_NAME(self, data):
         self.CONFIG['name'] = ''
-    
+
         while len(data)>0:
             char = self.readbytes(data, size=8, unsigned=True)
             self.CONFIG['name'] += chr(char)
@@ -2270,7 +2271,7 @@ class MSPy:
         self.RX_CONFIG['rx_max_usec'] = self.readbytes(data, size=16, unsigned=True)
         self.RX_CONFIG['rcInterpolation'] = self.readbytes(data, size=8, unsigned=True)
         self.RX_CONFIG['rcInterpolationInterval'] = self.readbytes(data, size=8, unsigned=True)
-        self.RX_CONFIG['airModeActivateThreshold'] = self.readbytes(data, size=16, unsigned=True)  
+        self.RX_CONFIG['airModeActivateThreshold'] = self.readbytes(data, size=16, unsigned=True)
         # spirx_protocol for INAV
         self.RX_CONFIG['rxSpiProtocol'] = self.readbytes(data, size=8, unsigned=True)
         # spirx_id for INAV
@@ -2319,7 +2320,7 @@ class MSPy:
         self.FILTER_CONFIG['gyro_lowpass_hz'] = self.readbytes(data, size=8, unsigned=True)
         self.FILTER_CONFIG['dterm_lowpass_hz'] = self.readbytes(data, size=16, unsigned=True)
         self.FILTER_CONFIG['yaw_lowpass_hz'] = self.readbytes(data, size=16, unsigned=True)
-        
+
         self.FILTER_CONFIG['gyro_notch_hz'] = self.readbytes(data, size=16, unsigned=True)
         self.FILTER_CONFIG['gyro_notch_cutoff'] = self.readbytes(data, size=16, unsigned=True)
         self.FILTER_CONFIG['dterm_notch_hz'] = self.readbytes(data, size=16, unsigned=True)
@@ -2332,7 +2333,7 @@ class MSPy:
             self.FILTER_CONFIG['dterm_lowpass_type'] = self.readbytes(data, size=8, unsigned=True)
 
             self.FILTER_CONFIG['gyro_hardware_lpf'] = self.readbytes(data, size=8, unsigned=True)
-            
+
             self.readbytes(data, size=8, unsigned=True) # must consume this byte
 
             self.FILTER_CONFIG['gyro_lowpass_hz'] = self.readbytes(data, size=16, unsigned=True)
@@ -2483,81 +2484,81 @@ class MSPy:
 
     def process_MSP_SET_ADJUSTMENT_RANGE(self, data):
         logging.info('Adjustment range saved')
-        
+
     def process_MSP_SET_BOARD_ALIGNMENT_CONFIG(self, data):
         logging.info('Board alignment saved')
-        
+
     def process_MSP_PID_CONTROLLER(self, data):
         self.PID['controller'] = self.readbytes(data, size=8, unsigned=True)
-        
+
     def process_MSP_SET_PID_CONTROLLER(self, data):
         logging.info('PID controller changed')
-        
+
     def process_MSP_SET_LOOP_TIME(self, data):
         logging.info('Looptime saved')
-        
+
     def process_MSP_SET_ARMING_CONFIG(self, data):
         logging.info('Arming config saved')
-        
+
     def process_MSP_SET_RESET_CURR_PID(self, data):
         logging.info('Current PID profile reset')
-        
+
     def process_MSP_SET_MOTOR_3D_CONFIG(self, data):
         logging.info('3D settings saved')
-        
+
     def process_MSP_SET_MIXER_CONFIG(self, data):
         logging.info('Mixer config saved')
-        
+
     def process_MSP_SET_RC_DEADBAND(self, data):
         logging.info('Rc controls settings saved')
-        
+
     def process_MSP_SET_SENSOR_ALIGNMENT(self, data):
         logging.info('Sensor alignment saved')
-        
+
     def process_MSP_SET_RX_CONFIG(self, data):
         logging.info('Rx config saved')
-        
+
     def process_MSP_SET_RXFAIL_CONFIG(self, data):
         logging.info('Rxfail config saved')
-        
+
     def process_MSP_SET_FAILSAFE_CONFIG(self, data):
         logging.info('Failsafe config saved')
-        
+
     def process_MSP_OSD_CONFIG(self, data):
         logging.info('OSD_CONFIG received')
-        
+
     def process_MSP_SET_OSD_CONFIG(self, data):
         logging.info('OSD config set')
-        
+
     def process_MSP_OSD_CHAR_READ(self, data):
         logging.info('OSD char received')
-        
+
     def process_MSP_OSD_CHAR_WRITE(self, data):
         logging.info('OSD char uploaded')
-        
+
     def process_MSP_VTX_CONFIG(self, data):
         logging.info('VTX_CONFIG received')
-        
+
     def process_MSP_SET_VTX_CONFIG(self, data):
         logging.info('VTX_CONFIG set')
-        
+
     def process_MSP_SET_NAME(self, data):
         logging.info('Name set')
-        
+
     def process_MSP_SET_FILTER_CONFIG(self, data):
         logging.info('Filter config set')
-        
+
     def process_MSP_SET_ADVANCED_CONFIG(self, data):
         logging.info('Advanced config parameters set')
-        
+
     def process_MSP_SET_SENSOR_CONFIG(self, data):
         logging.info('Sensor config parameters set')
-        
+
     def process_MSP_COPY_PROFILE(self, data):
         logging.info('Copy profile')
-        
+
     def process_MSP_ARMING_DISABLE(self, data):
         logging.info('Arming disable')
-        
+
     def process_MSP_SET_RTC(self, data):
         logging.info('Real time clock set')
