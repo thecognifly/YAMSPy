@@ -1571,11 +1571,14 @@ class MSPy:
             else:
                 logging.warning('FC reports unsupported message error - Code {}'.format(code))
                 result = 1
-        elif (not dataHandler['crcError']):
+        elif dataHandler['crcError']:
             logging.warning("dataHandler has a crcError.")
             result = 1
-        else:
+        elif dataHandler['packet_error']:
             logging.warning("dataHandler has an Error.")
+            result = 1
+        else:
+            logging.debug("data is {}".format(data))  # probably an empty list
             result = 1
         
         return result
