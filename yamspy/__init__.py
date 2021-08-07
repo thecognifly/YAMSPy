@@ -1103,7 +1103,7 @@ class MSPy:
                 except IndexError:
                     # Instead of crashing everything, let's just ignore this msg...
                     # ... and hope for the best :)
-                    logging.warning('IndexError detected on state: {}'.format(dataHandler['state']))
+                    logging.debug('IndexError detected on state: {}'.format(dataHandler['state']))
                     dataHandler['state'] = -1
 
                 # it will always fall in the first state by default
@@ -1119,14 +1119,14 @@ class MSPy:
                         dataHandler['msp_version'] = 2
                         dataHandler['state'] = 2
                     else: # something went wrong, no M received...
-                        logging.warning('Something went wrong, no M received.')
+                        logging.debug('Something went wrong, no M received.')
                         break # sends it to the error state
 
                 elif dataHandler['state'] == 2: # direction (should be >)
                     dataHandler['unsupported'] = 0
                     if (data == 33): # !
                         # FC reports unsupported message error
-                        logging.warning('FC reports unsupported message error.')
+                        logging.debug('FC reports unsupported message error.')
                         dataHandler['unsupported'] = 1
                         break # sends it to the error state
                     else:
@@ -1250,7 +1250,7 @@ class MSPy:
                                 return dataHandler
                             else:
                                 # wrong checksum
-                                logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
+                                logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
                                                                                                             data,
                                                                                                             dataHandler['message_checksum']))
                                 dataHandler['crcError'] = True
@@ -1271,14 +1271,14 @@ class MSPy:
                                 return dataHandler
                             else:
                                 # wrong checksum
-                                logging.warning('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
+                                logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
                                                                                                             data,
                                                                                                             dataHandler['message_checksum']))
                                 dataHandler['crcError'] = True
                                 break # sends it to the error state
 
             # it means an error occurred
-            logging.warning('Error detected on state: {}'.format(dataHandler['state']))
+            logging.debug('Error detected on state: {}'.format(dataHandler['state']))
             dataHandler['packet_error'] = 1
 
             return dataHandler
@@ -1555,10 +1555,10 @@ class MSPy:
             logging.debug("Nothing was received - Code 0")
             return -1
         elif dataHandler['crcError']:
-            logging.warning("dataHandler has a crcError.")
+            logging.debug("dataHandler has a crcError.")
             return -2
         elif dataHandler['packet_error']:
-            logging.warning("dataHandler has a packet_error.")
+            logging.debug("dataHandler has a packet_error.")
             return -3
         else:
             if (not dataHandler['unsupported']):
@@ -1571,13 +1571,13 @@ class MSPy:
                         else:
                             return 0 # because a valid message may contain no data...
                     except IndexError as err:
-                        logging.warning('Received data processing error: {}'.format(err))
+                        logging.debug('Received data processing error: {}'.format(err))
                         return -4
                 else:
-                    logging.warning('Unknown code received: {}'.format(code))
+                    logging.debug('Unknown code received: {}'.format(code))
                     return -5
             else:
-                logging.warning('FC reports unsupported message error - Code {}'.format(code))
+                logging.debug('FC reports unsupported message error - Code {}'.format(code))
                 return -6
         
 
