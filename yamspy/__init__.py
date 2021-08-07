@@ -1546,42 +1546,40 @@ class MSPy:
         Returns
         -------
         int
-            0 if successful or 1 if not
+            len(data) when successful or -(error type) if not
         """
 
         data = dataHandler['dataView'] # DataView (allowing us to view arrayBuffer as struct/union)
         code = dataHandler['code']
         if code == 0: # code==0 means nothing was received...
             logging.debug("Nothing was received - Code 0")
-            return 1
-
-        if (not dataHandler['crcError']) and (not dataHandler['packet_error']) and data:
-            result = 0
+            return -1
+        elif dataHandler['crcError']:
+            logging.warning("dataHandler has a crcError.")
+            return -2
+        elif dataHandler['packet_error']:
+            logging.warning("dataHandler has a packet_error.")
+            return -3
+        else:
             if (not dataHandler['unsupported']):
                 processor = MSPy.__dict__.get("process_" + MSPy.MSPCodes2Str[code])
                 if processor: # if nothing is found, should be None
                     try:
-                        processor(self,data) # use it..
+                        if data:
+                            processor(self,data) # use it..
+                            return len(data)
+                        else:
+                            return 0 # because a valid message may contain no data...
                     except IndexError as err:
                         logging.warning('Received data processing error: {}'.format(err))
-                        result = 1
+                        return -4
                 else:
                     logging.warning('Unknown code received: {}'.format(code))
-                    result = 1
+                    return -5
             else:
                 logging.warning('FC reports unsupported message error - Code {}'.format(code))
-                result = 1
-        elif dataHandler['crcError']:
-            logging.warning("dataHandler has a crcError.")
-            result = 1
-        elif dataHandler['packet_error']:
-            logging.warning("dataHandler has an Error.")
-            result = 1
-        else:
-            logging.debug("data is {}".format(data))  # probably an empty list
-            result = 1
+                return -6
         
-        return result
 
     def process_MSP_STATUS(self, data):
         self.CONFIG['cycleTime'] = self.readbytes(data, size=16, unsigned=True)
