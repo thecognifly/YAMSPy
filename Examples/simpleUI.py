@@ -69,7 +69,7 @@ NO_OF_CYCLES_AVERAGE_GUI_TIME = 10
 # https://pyserial.readthedocs.io/en/latest/shortintro.html
 #
 #
-SERIAL_PORT = "/dev/ttyACM0"
+SERIAL_PORT = "/dev/serial0"
 
 def run_curses(external_function):
     result=1

@@ -39,7 +39,7 @@ from yamspy import MSPy
 # https://pyserial.readthedocs.io/en/latest/shortintro.html
 #
 #
-serial_port = "/dev/ttyACM0"
+serial_port = "/dev/serial0"
 
 if __name__ == '__main__':
     with MSPy(device=serial_port, loglevel='WARNING') as board:

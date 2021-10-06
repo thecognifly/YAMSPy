@@ -575,7 +575,7 @@ class CogniFly():
         prev_time = time.time()
         while not self.shutdown:
             print("Connecting to the FC...")
-            with MSPy(device='/dev/ttyS0', loglevel='WARNING', baudrate=115200) as self.board:
+            with MSPy(device='/dev/serial0', loglevel='WARNING', baudrate=115200) as self.board:
                 if self.board == 1: # an error occurred...
                     print(">"*self.NofCHEV + "Connecting to the FC... FAILED!")
                     print(">"*self.NofCHEV + "Trying again...")
