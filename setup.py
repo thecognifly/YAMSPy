@@ -1,37 +1,38 @@
+import sys
 from setuptools import setup, find_packages
-import codecs
-import os.path
 
+if sys.version_info < (3, 7):
+    sys.exit('Sorry, Python < 3.7 is not supported.')
 
-# from https://packaging.python.org/guides/single-sourcing-package-version/
-def read(rel_path):
-    here = os.path.abspath(os.path.dirname(__file__))
-    with codecs.open(os.path.join(here, rel_path), 'r') as fp:
-        return fp.read()
-
-def get_version(rel_path):
-    for line in read(rel_path).splitlines():
-        if line.startswith('__version__'):
-            delim = '"' if '"' in line else "'"
-            return line.split(delim)[1]
-    else:
-        raise RuntimeError("Unable to find version string.")
-
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+    
 setup(
-    name="YAMSPy",
-    version=get_version("yamspy/__init__.py"),
-    packages=['yamspy'],
-    install_requires=['pyserial'],
-
-    # metadata to display on PyPI
+    name="yamspy",
+    packages=[package for package in find_packages()],
+    version="0.3.3",
+    license="GPL",
+    description="Yet Another Implementation of Multiwii Serial Protocol Python Interface for Betaflight, iNAV, etc.",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     author="Ricardo de Azambuja",
     author_email="ricardo.azambuja@gmail.com",
-    description="Yet Another Implementation of Multiwii Serial Protocol Python Interface for Betaflight",
-    keywords="Betaflight iNAV drone UAV Multi Wii Serial Protocol MSP",
     url="https://github.com/ricardodeazambuja/YAMSPy",
+    download_url="https://github.com/thecognifly/YAMSPy/archive/refs/tags/v0.3.3.tar.gz",
+    keywords=['CogniFly', 'Betaflight', 'iNAV', 'drone', 'UAV', 'Multi Wii Serial Protocol', 'MSP'],
+    install_requires=['pyserial'],
     classifiers=[
-        'Programming Language :: Python :: 3 :: Only' # https://pypi.org/classifiers/
+          'Development Status :: 4 - Beta',
+          'Intended Audience :: Developers',
+          'Intended Audience :: Education',
+          'Intended Audience :: Information Technology',
+          'Intended Audience :: Science/Research',
+          'License :: OSI Approved :: GPL License',
+          'Operating System :: Microsoft :: Windows',
+          'Operating System :: POSIX :: Linux',
+          'Programming Language :: Python',
+          'Framework :: Robot Framework :: Library',
+          'Topic :: Education',
+          'Topic :: Scientific/Engineering :: Artificial Intelligence'
     ]
 )
-
-# https://setuptools.readthedocs.io/en/latest/setuptools.html
