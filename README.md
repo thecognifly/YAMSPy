@@ -65,6 +65,13 @@ Screen can be as annoying as [VIM](https://stackoverflow.blog/2017/05/23/stack-o
 - ```ctrl+a and the ESC key``` to move around using the arrow keys (to stop this behaviour just press the ESC key again.
 - ```ctrl+a, then : and finally H``` to save everything printed on the screen after that point.
 
+
+## Troubleshooting
+If you can't connect (talk) to the FC:
+1. Check if you enabled MSP in the correct UART using inav-configurator (or betaflight-configurator)
+2. Make sure you connected the cables correctly: TX => RX and RX => TX
+3. Verify the devices available using ```ls -lh /dev/serial*``` and change it in the Python script if needed.
+
 ## TODO:
 Currently the main library is made of a HUGE single file. That is just terrible, but I didn't have time to split it and test. So if you want to help, please, be my guest. Talking about testing, I haven't implemented any automated test besides the example files, again, be my guest ;)
 
