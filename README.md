@@ -72,6 +72,9 @@ If you can't connect (talk) to the FC:
 2. Make sure you connected the cables correctly: TX => RX and RX => TX
 3. Verify the devices available using ```ls -lh /dev/serial*``` and change it in the Python script if needed.
 
+## Stargazers over time
+[![Stargazers over time](https://starchart.cc/thecognifly/YAMSPy.svg)](https://starchart.cc/thecognifly/YAMSPy)
+
 ## TODO:
 Currently the main library is made of a HUGE single file. That is just terrible, but I didn't have time to split it and test. So if you want to help, please, be my guest. Talking about testing, I haven't implemented any automated test besides the example files, again, be my guest ;)
 
