@@ -1108,6 +1108,7 @@ class MSPy:
                     # ... and hope for the best :)
                     logging.debug('IndexError detected on state: {}'.format(dataHandler['state']))
                     dataHandler['state'] = -1
+                    break # Sends it to the error state
 
                 # it will always fall in the first state by default
                 if dataHandler['state'] == 0: # sync char 1
