@@ -1056,8 +1056,7 @@ class MSPy:
             # will return a code 200. However, the message is always empty (data_length = 0).
             _ = self.receive_raw_msg(size = 6)
 
-        
-    def receive_raw_msg(self, size):
+    def receive_raw_msg(self, size, timeout = 10):
         """Receive multiple bytes at once when it's not a jumbo frame.
 
         Returns
@@ -1067,7 +1066,11 @@ class MSPy:
         """
         with self.serial_port_read_lock: # It's necessary to lock everything because order is important
             local_read = self.conn.read
+            timeout = time.time() + timeout
             while True:
+                if time.time() >= timeout:
+                    logging.warning("Timeout occured when receiving a message")
+                    break
                 msg_header = local_read()
                 if msg_header:
                     if ord(msg_header) == 36: # $
@@ -1105,6 +1108,7 @@ class MSPy:
                     # ... and hope for the best :)
                     logging.debug('IndexError detected on state: {}'.format(dataHandler['state']))
                     dataHandler['state'] = -1
+                    break # Sends it to the error state
 
                 # it will always fall in the first state by default
                 if dataHandler['state'] == 0: # sync char 1
