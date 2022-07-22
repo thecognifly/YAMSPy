@@ -65,6 +65,9 @@ Screen can be as annoying as [VIM](https://stackoverflow.blog/2017/05/23/stack-o
 - ```ctrl+a and the ESC key``` to move around using the arrow keys (to stop this behaviour just press the ESC key again.
 - ```ctrl+a, then : and finally H``` to save everything printed on the screen after that point.
 
+### Forward data
+It's possible to use [`socat`](https://linux.die.net/man/1/socat) to connect the local serial port, where the flight controller is physically wired, to another computer through the network. This allows the user to use a GUI (e.g. inav-configurator) from distance (e.g. wifi). Detailed instructions can be found in [our inav-configurator fork](https://github.com/thecognifly/inav-configurator/releases/tag/socat).
+
 
 ## Troubleshooting
 If you can't connect (talk) to the FC:
