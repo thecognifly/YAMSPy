@@ -60,6 +60,8 @@ If you feel adventurous, you can try to connect using [linux screen](https://lin
 ```
 $ screen /dev/ttyACM0 115200
 ```
+**Maybe the serial port is not the `ttyACM0` for you (e.g. `ttyS0`). You can confirm using something like `dmesg | grep tty`.**
+
 Screen can be as annoying as [VIM](https://stackoverflow.blog/2017/05/23/stack-overflow-helping-one-million-developers-exit-vim/) sometimes, so my commands:
 - ```ctrl+a and then \``` to exit.
 - ```ctrl+a and the ESC key``` to move around using the arrow keys (to stop this behaviour just press the ESC key again.
