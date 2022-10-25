@@ -24,7 +24,7 @@ $ sudo pip3 install .
 
 Option #2: Install directly from git (the `--upgrade` is to make sure it will install the last commit, even if the version number didn't increase)
 ```
-$ sudo pip3 install git+git://github.com/ricardodeazambuja/yamspy --upgrade
+$ sudo pip3 install git+https://github.com/ricardodeazambuja/yamspy --upgrade
 ```
 
 On Linux you may need to add your user to the dialout group:  
