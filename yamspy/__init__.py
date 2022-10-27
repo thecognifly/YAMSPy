@@ -38,7 +38,7 @@ __author__ = "Ricardo de Azambuja"
 __copyright__ = "Copyright 2019, MISTLab.ca"
 __credits__ = [""]
 __license__ = "GPL"
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 __maintainer__ = "Ricardo de Azambuja"
 __email__ = "ricardo.azambuja@gmail.com"
 __status__ = "Development"
@@ -47,7 +47,9 @@ import logging
 import struct
 import time
 import sys
-from threading import Lock
+from serial import SerialException
+
+from threading import Lock, RLock
 
 if "linux" in sys.platform:
     import ctypes
@@ -56,250 +58,18 @@ else:
     def ffs(x): # modified from https://stackoverflow.com/a/36059264
         return (x&-x).bit_length()
 
-import serial # pyserial version???
+from . import msp_ctrl
+from . import msp_codes
 
 class MSPy:
-
-    # Dictionary with all the possible codes
-    # Based on betaflight-configurator and inav-configurator 
-    # Latest versions can be found:
-    #  https://github.com/betaflight/betaflight-configurator/blob/master/src/js/msp/MSPCodes.js
-    #  https://github.com/iNavFlight/inav-configurator/blob/master/js/msp/MSPCodes.js
-
-    MSPCodes = {
-        'MSP_API_VERSION':                1,
-        'MSP_FC_VARIANT':                 2,
-        'MSP_FC_VERSION':                 3,
-        'MSP_BOARD_INFO':                 4,
-        'MSP_BUILD_INFO':                 5,
-
-        'MSP_NAME':                       10,
-        'MSP_SET_NAME':                   11,
-
-        'MSP_BATTERY_CONFIG':             32,
-        'MSP_SET_BATTERY_CONFIG':         33,
-        'MSP_MODE_RANGES':                34,
-        'MSP_SET_MODE_RANGE':             35,
-        'MSP_FEATURE_CONFIG':             36,
-        'MSP_SET_FEATURE_CONFIG':         37,
-        'MSP_BOARD_ALIGNMENT_CONFIG':     38,
-        'MSP_SET_BOARD_ALIGNMENT_CONFIG': 39,
-        'MSP_CURRENT_METER_CONFIG':       40,
-        'MSP_SET_CURRENT_METER_CONFIG':   41,
-        'MSP_MIXER_CONFIG':               42,
-        'MSP_SET_MIXER_CONFIG':           43,
-        'MSP_RX_CONFIG':                  44,
-        'MSP_SET_RX_CONFIG':              45,
-        'MSP_LED_COLORS':                 46,
-        'MSP_SET_LED_COLORS':             47,
-        'MSP_LED_STRIP_CONFIG':           48,
-        'MSP_SET_LED_STRIP_CONFIG':       49,
-        'MSP_RSSI_CONFIG':                50,
-        'MSP_SET_RSSI_CONFIG':            51,
-        'MSP_ADJUSTMENT_RANGES':          52,
-        'MSP_SET_ADJUSTMENT_RANGE':       53,
-        'MSP_CF_SERIAL_CONFIG':           54,
-        'MSP_SET_CF_SERIAL_CONFIG':       55,
-        'MSP_VOLTAGE_METER_CONFIG':       56,
-        'MSP_SET_VOLTAGE_METER_CONFIG':   57,
-        'MSP_SONAR':                      58,
-        'MSP_PID_CONTROLLER':             59,
-        'MSP_SET_PID_CONTROLLER':         60,
-        'MSP_ARMING_CONFIG':              61,
-        'MSP_SET_ARMING_CONFIG':          62,
-        'MSP_RX_MAP':                     64,
-        'MSP_SET_RX_MAP':                 65,
-        #'MSP_BF_CONFIG':                  66, # DEPRECATED
-        #'MSP_SET_BF_CONFIG':              67, # DEPRECATED
-        'MSP_SET_REBOOT':                 68,
-        #'MSP_BF_BUILD_INFO':              69, # Not used
-        'MSP_DATAFLASH_SUMMARY':          70,
-        'MSP_DATAFLASH_READ':             71,
-        'MSP_DATAFLASH_ERASE':            72,
-        'MSP_LOOP_TIME':                  73,
-        'MSP_SET_LOOP_TIME':              74,
-        'MSP_FAILSAFE_CONFIG':            75,
-        'MSP_SET_FAILSAFE_CONFIG':        76,
-        'MSP_RXFAIL_CONFIG':              77,
-        'MSP_SET_RXFAIL_CONFIG':          78,
-        'MSP_SDCARD_SUMMARY':             79,
-        'MSP_BLACKBOX_CONFIG':            80,
-        'MSP_SET_BLACKBOX_CONFIG':        81,
-        'MSP_TRANSPONDER_CONFIG':         82,
-        'MSP_SET_TRANSPONDER_CONFIG':     83,
-        'MSP_OSD_CONFIG':                 84,
-        'MSP_SET_OSD_CONFIG':             85,
-        'MSP_OSD_CHAR_READ':              86,
-        'MSP_OSD_CHAR_WRITE':             87,
-        'MSP_VTX_CONFIG':                 88,
-        'MSP_SET_VTX_CONFIG':             89,
-        'MSP_ADVANCED_CONFIG':            90,
-        'MSP_SET_ADVANCED_CONFIG':        91,
-        'MSP_FILTER_CONFIG':              92,
-        'MSP_SET_FILTER_CONFIG':          93,
-        'MSP_PID_ADVANCED':               94,
-        'MSP_SET_PID_ADVANCED':           95,
-        'MSP_SENSOR_CONFIG':              96,
-        'MSP_SET_SENSOR_CONFIG':          97,
-        #'MSP_SPECIAL_PARAMETERS':         98, // DEPRECATED
-        'MSP_ARMING_DISABLE':             99,
-        #'MSP_SET_SPECIAL_PARAMETERS':     99, // DEPRECATED
-        #'MSP_IDENT':                      100, // DEPRECTED
-        'MSP_STATUS':                     101,
-        'MSP_RAW_IMU':                    102,
-        'MSP_SERVO':                      103,
-        'MSP_MOTOR':                      104,
-        'MSP_RC':                         105,
-        'MSP_RAW_GPS':                    106,
-        'MSP_COMP_GPS':                   107,
-        'MSP_ATTITUDE':                   108,
-        'MSP_ALTITUDE':                   109,
-        'MSP_ANALOG':                     110,
-        'MSP_RC_TUNING':                  111,
-        'MSP_PID':                        112,
-        #'MSP_BOX':                        113, // DEPRECATED 
-        'MSP_MISC':                       114, # DEPRECATED
-        'MSP_BOXNAMES':                   116,
-        'MSP_PIDNAMES':                   117,
-        'MSP_WP':                         118, # Not used
-        'MSP_BOXIDS':                     119,
-        'MSP_SERVO_CONFIGURATIONS':       120,
-        'MSP_MOTOR_3D_CONFIG':            124,
-        'MSP_RC_DEADBAND':                125,
-        'MSP_SENSOR_ALIGNMENT':           126,
-        'MSP_LED_STRIP_MODECOLOR':        127,
-
-        'MSP_VOLTAGE_METERS':             128,
-        'MSP_CURRENT_METERS':             129,
-        'MSP_BATTERY_STATE':              130,
-        'MSP_MOTOR_CONFIG':               131,
-        'MSP_GPS_CONFIG':                 132,
-        'MSP_COMPASS_CONFIG':             133,
-        'MSP_GPS_RESCUE':                 135,
-
-        'MSP_STATUS_EX':                  150,
-
-        'MSP_UID':                        160,
-        'MSP_GPS_SV_INFO':                164,
-
-        'MSP_GPSSTATISTICS':              166,
-
-        'MSP_DISPLAYPORT':                182,
-
-        'MSP_COPY_PROFILE':               183,
-
-        'MSP_BEEPER_CONFIG':              184,
-        'MSP_SET_BEEPER_CONFIG':          185,
-
-        'MSP_SET_RAW_RC':                 200,
-        'MSP_SET_RAW_GPS':                201, # Not used
-        'MSP_SET_PID':                    202,
-        #'MSP_SET_BOX':                    203, // DEPRECATED
-        'MSP_SET_RC_TUNING':              204,
-        'MSP_ACC_CALIBRATION':            205,
-        'MSP_MAG_CALIBRATION':            206,
-        'MSP_SET_MISC':                   207, # DEPRECATED
-        'MSP_RESET_CONF':                 208,
-        'MSP_SET_WP':                     209, # Not used
-        'MSP_SELECT_SETTING':             210,
-        'MSP_SET_HEADING':                211, # Not used
-        'MSP_SET_SERVO_CONFIGURATION':    212,
-        'MSP_SET_MOTOR':                  214,
-        'MSP_SET_MOTOR_3D_CONFIG':        217,
-        'MSP_SET_RC_DEADBAND':            218,
-        'MSP_SET_RESET_CURR_PID':         219,
-        'MSP_SET_SENSOR_ALIGNMENT':       220,
-        'MSP_SET_LED_STRIP_MODECOLOR':    221,
-        'MSP_SET_MOTOR_CONFIG':           222,
-        'MSP_SET_GPS_CONFIG':             223,
-        'MSP_SET_COMPASS_CONFIG':         224,
-        'MSP_SET_GPS_RESCUE':             225,
-
-        'MSP_MODE_RANGES_EXTRA':          238,
-        'MSP_SET_ACC_TRIM':               239,
-        'MSP_ACC_TRIM':                   240,
-        'MSP_SERVO_MIX_RULES':            241,
-        'MSP_SET_SERVO_MIX_RULE':         242, # Not used
-        'MSP_SET_4WAY_IF':                245, # Not used
-        'MSP_SET_RTC':                    246,
-        'MSP_RTC':                        247, # Not used
-        'MSP_SET_BOARD_INFO':             248, # Not used
-        'MSP_SET_SIGNATURE':              249, # Not used
-
-        'MSP_EEPROM_WRITE':               250,
-        'MSP_DEBUGMSG':                   253, # Not used
-        'MSP_DEBUG':                      254,
-
-        # INAV specific codes
-        'MSPV2_SETTING':                      0x1003,
-        'MSPV2_SET_SETTING':                  0x1004,
-
-        'MSP2_COMMON_MOTOR_MIXER':            0x1005,
-        'MSP2_COMMON_SET_MOTOR_MIXER':        0x1006,
-
-        'MSP2_COMMON_SETTING_INFO':           0x1007,
-        'MSP2_COMMON_PG_LIST':                0x1008,
-
-        'MSP2_CF_SERIAL_CONFIG':              0x1009,
-        'MSP2_SET_CF_SERIAL_CONFIG':          0x100A,
-
-        'MSPV2_INAV_STATUS':                  0x2000,
-        'MSPV2_INAV_OPTICAL_FLOW':            0x2001,
-        'MSPV2_INAV_ANALOG':                  0x2002,
-        'MSPV2_INAV_MISC':                    0x2003,
-        'MSPV2_INAV_SET_MISC':                0x2004,
-        'MSPV2_INAV_BATTERY_CONFIG':          0x2005,
-        'MSPV2_INAV_SET_BATTERY_CONFIG':      0x2006,
-        'MSPV2_INAV_RATE_PROFILE':            0x2007,
-        'MSPV2_INAV_SET_RATE_PROFILE':        0x2008,
-        'MSPV2_INAV_AIR_SPEED':               0x2009,
-        'MSPV2_INAV_OUTPUT_MAPPING':          0x200A,
-
-        'MSP2_INAV_MIXER':                    0x2010,
-        'MSP2_INAV_SET_MIXER':                0x2011,
-
-        'MSP2_INAV_OSD_LAYOUTS':              0x2012,
-        'MSP2_INAV_OSD_SET_LAYOUT_ITEM':      0x2013,
-        'MSP2_INAV_OSD_ALARMS':               0x2014,
-        'MSP2_INAV_OSD_SET_ALARMS':           0x2015,
-        'MSP2_INAV_OSD_PREFERENCES':          0x2016,
-        'MSP2_INAV_OSD_SET_PREFERENCES':      0x2017,
-
-        'MSP2_INAV_MC_BRAKING':               0x200B,
-        'MSP2_INAV_SET_MC_BRAKING':           0x200C,
-
-        'MSP2_INAV_SELECT_BATTERY_PROFILE':   0x2018,
-
-        'MSP2_INAV_DEBUG':                    0x2019,
-
-        'MSP2_BLACKBOX_CONFIG':               0x201A,
-        'MSP2_SET_BLACKBOX_CONFIG':           0x201B,
-
-        'MSP2_INAV_TEMP_SENSOR_CONFIG':       0x201C,
-        'MSP2_INAV_SET_TEMP_SENSOR_CONFIG':   0x201D,
-        'MSP2_INAV_TEMPERATURES':             0x201E,
-
-        'MSP2_INAV_SERVO_MIXER':              0x2020,
-        'MSP2_INAV_SET_SERVO_MIXER':          0x2021,
-        'MSP2_INAV_LOGIC_CONDITIONS':         0x2022,
-        'MSP2_INAV_SET_LOGIC_CONDITIONS':     0x2023,
-        'MSP2_INAV_LOGIC_CONDITIONS_STATUS':  0x2026,
-
-        'MSP2_PID':                           0x2030,
-        'MSP2_SET_PID':                       0x2031,
-
-        'MSP2_INAV_OPFLOW_CALIBRATION':       0x2032
-    }
-
-    # The idea is to automate, so only the dictionary above needs to be updated
-    MSPCodes2Str = {v: i for i,v in MSPCodes.items()}
+    MSPCodes = msp_codes.MSPCodes
+    MSPCodes2Str = msp_codes.MSPCodes2Str
 
     SIGNATURE_LENGTH = 32
 
-    JUMBO_FRAME_SIZE_LIMIT = 255
-
     def __init__(self, device, baudrate=115200, trials=1, 
-                 logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG'):
+                 logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG', timeout=1,
+                 use_tcp=False):
         """
         Parameters
         ----------
@@ -317,28 +87,6 @@ class MSPy:
         loglevel : str, optional
             The loglevel passed to logging (default is 'DEBUG')
         """
-
-        self.dataHandler_init = {
-            'msp_version':                1,
-            'state':                      0,
-            'message_direction':          -1,
-            'code':                       0,
-            'dataView':                   0,
-            'message_length_expected':    0,
-            'message_length_received':    0,
-            'message_buffer':             [],
-            'message_buffer_uint8_view':  [],
-            'message_checksum':           0,
-            'messageIsJumboFrame':        False,
-            'crcError':                   False,
-
-            'callbacks':                  [],
-            'packet_error':               0,
-            'unsupported':                0,
-
-            'last_received_timestamp':   None,
-            'listeners':                  []
-        }
 
         self.CONFIG = {
             'apiVersion':                       "0.0.0",
@@ -840,46 +588,63 @@ class MSPy:
                                 level=getattr(logging, loglevel.upper()),
                                 stream=sys.stdout)
 
-        # For some reason, passing the arguments doesn't work and
-        # the serial fails...
-        # self.conn = serial.Serial(port=device,
-        #                           baudrate=baudrate,
-        #                           bytesize=serial.EIGHTBITS,
-        #                           parity=serial.PARITY_NONE,
-        #                           stopbits=serial.STOPBITS_ONE,
-        #                           timeout=0, # 0 for non-blocking mode (read)
-        #                           xonxoff=False,
-        #                           rtscts=False,
-        #                           write_timeout=1, # it will raise serial.SerialTimeoutException
-        #                           dsrdtr=False,
-        #                           inter_byte_timeout=None,
-        #                           exclusive=None)
+        self.use_tcp = use_tcp
+        self.timeout = timeout
+        self.device = device
 
-        self.conn = serial.Serial()
-        self.conn.port = device
-        self.conn.baudrate = baudrate
-        self.conn.bytesize = serial.EIGHTBITS
-        self.conn.parity = serial.PARITY_NONE
-        self.conn.stopbits = serial.STOPBITS_ONE
-        self.conn.timeout = 1
-        self.conn.xonxoff = False
-        self.conn.rtscts = False
-        self.conn.dsrdtr = False
-        self.conn.writeTimeout = 1
+        if self.use_tcp is False:
+            import serial # pyserial
+            self.conn = serial.Serial()
+            self.conn.port = self.device
+            self.conn.baudrate = baudrate
+            self.conn.bytesize = serial.EIGHTBITS
+            self.conn.parity = serial.PARITY_NONE
+            self.conn.stopbits = serial.STOPBITS_ONE
+            self.conn.timeout = self.timeout
+            self.conn.xonxoff = False
+            self.conn.rtscts = False
+            self.conn.dsrdtr = False
+            self.conn.writeTimeout = 1
+            self.write = self.conn.write
+            self.read = self.conn.read
+            self.start = self.conn.open
+            # For some reason, passing the arguments doesn't work and
+            # the serial fails...
+            # self.conn = serial.Serial(port=device,
+            #                           baudrate=baudrate,
+            #                           bytesize=serial.EIGHTBITS,
+            #                           parity=serial.PARITY_NONE,
+            #                           stopbits=serial.STOPBITS_ONE,
+            #                           timeout=0, # 0 for non-blocking mode (read)
+            #                           xonxoff=False,
+            #                           rtscts=False,
+            #                           write_timeout=1, # it will raise serial.SerialTimeoutException
+            #                           dsrdtr=False,
+            #                           inter_byte_timeout=None,
+            #                           exclusive=None)
+
+        
+        else :
+            from .tcp_conn import TCPSocket
+            socket = TCPSocket()
+            self.conn = socket        
+            self.write = self.conn.send
+            self.read = self.conn.receive
+            self.start = self.conn.connect
 
         self.ser_trials = trials
 
-        self.serial_port_write_lock = Lock()
-        self.serial_port_read_lock = Lock()
+        self.port_read_lock = RLock()
 
-
+        self.INAV = False
+        
     def __enter__(self):
-        self.is_serial_open = not self.connect(trials=self.ser_trials)
+        is_connection_open = not self.connect(trials=self.ser_trials)
 
-        if self.is_serial_open:
+        if is_connection_open:
             return self
         else:
-            logging.warning("Serial port ({}) not ready/available".format(self.conn.port))
+            logging.warning(f"{self.device} is not ready/available")
             return 1
 
 
@@ -907,15 +672,19 @@ class MSPy:
 
         for _ in range(trials):
             try:
-                self.conn.open()
+                if self.use_tcp:
+                    self.start(host=self.device, timeout=self.timeout)
+                else:
+                    self.start()
+
                 self.basic_info()
                 return 0
                 
-            except serial.SerialException as err:
-                logging.warning("Error opening the serial port ({0}): {1}".format(self.conn.port, err))
+            except SerialException as err:
+                logging.warning(f"Error opening the serial port ({self.device}): {err}")
             
             except FileNotFoundError as err:
-                logging.warning("Port ({0}) not found: {1}".format(self.conn.port, err))
+                logging.warning(f"Port ({self.device}) not found: {err}")
 
             time.sleep(delay)
         
@@ -932,8 +701,6 @@ class MSPy:
 
         if 'INAV' in self.CONFIG['flightControllerIdentifier']:
             self.INAV = True
-        else:
-            self.INAV = False
 
         basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 
                                'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
@@ -1056,236 +823,14 @@ class MSPy:
             # will return a code 200. However, the message is always empty (data_length = 0).
             _ = self.receive_raw_msg(size = 6)
 
+        
     def receive_raw_msg(self, size, timeout = 10):
-        """Receive multiple bytes at once when it's not a jumbo frame.
-
-        Returns
-        -------
-        bytes
-            data received
-        """
-        with self.serial_port_read_lock: # It's necessary to lock everything because order is important
-            local_read = self.conn.read
-            timeout = time.time() + timeout
-            while True:
-                if time.time() >= timeout:
-                    logging.warning("Timeout occured when receiving a message")
-                    break
-                msg_header = local_read()
-                if msg_header:
-                    if ord(msg_header) == 36: # $
-                        break
-
-            msg = local_read(size - 1) # -1 to compensate for the $
-            return msg_header + msg
+        with self.port_read_lock:
+            return msp_ctrl.receive_raw_msg(self.read, logging, size, timeout)
 
     def receive_msg(self):
-        """Receive an MSP message from the serial port
-        Based on betaflight-configurator (https://git.io/fjRAz)
-
-        Returns
-        -------
-        dict
-            dataHandler with the received data pre-parsed
-        """
-
-        dataHandler = self.dataHandler_init.copy()
-        received_bytes = self.receive_raw_msg(3)
-        dataHandler['last_received_timestamp'] = time.time()
-
-        local_read = self.conn.read
-        with self.serial_port_read_lock: # It's necessary to lock everything because order is important
-            di = 0
-            while True:
-                try:
-                    data = received_bytes[di]
-                    di += 1
-                    logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
-                                                                            dataHandler['state'], 
-                                                                            data))
-                except IndexError:
-                    # Instead of crashing everything, let's just ignore this msg...
-                    # ... and hope for the best :)
-                    logging.debug('IndexError detected on state: {}'.format(dataHandler['state']))
-                    dataHandler['state'] = -1
-                    break # Sends it to the error state
-
-                # it will always fall in the first state by default
-                if dataHandler['state'] == 0: # sync char 1
-                    if (data == 36): # $ - a new MSP message begins with $
-                        dataHandler['state'] = 1
-
-                elif dataHandler['state'] == 1: # sync char 2
-                    if (data == 77): # M - followed by an M => MSP V1
-                        dataHandler['msp_version'] = 1
-                        dataHandler['state'] = 2
-                    elif (data == 88): # X => MSP V2
-                        dataHandler['msp_version'] = 2
-                        dataHandler['state'] = 2
-                    else: # something went wrong, no M received...
-                        logging.debug('Something went wrong, no M received.')
-                        break # sends it to the error state
-
-                elif dataHandler['state'] == 2: # direction (should be >)
-                    dataHandler['unsupported'] = 0
-                    if (data == 33): # !
-                        # FC reports unsupported message error
-                        logging.debug('FC reports unsupported message error.')
-                        dataHandler['unsupported'] = 1
-                        break # sends it to the error state
-                    else:
-                        if (data == 62): # > FC to PC
-                            dataHandler['message_direction'] = 1
-                        elif (data == 60): # < PC to FC
-                            dataHandler['message_direction'] = 0
-                            
-                        if dataHandler['msp_version'] == 1:
-                            dataHandler['state'] = 3
-                            received_bytes += local_read(2)
-                        elif dataHandler['msp_version'] == 2:
-                            dataHandler['state'] = 2.1
-                            received_bytes += local_read(5)
-
-                elif dataHandler['state'] == 2.1: # MSP V2: flag (ignored)
-                    dataHandler['flags'] = data # 4th byte 
-                    dataHandler['state'] = 2.2
-
-                elif dataHandler['state'] == 2.2: # MSP V2: code LOW
-                    dataHandler['code'] = data
-                    dataHandler['state'] = 2.3
-
-                elif dataHandler['state'] == 2.3: # MSP V2: code HIGH
-                    dataHandler['code'] |= data << 8
-                    dataHandler['state'] = 3.1
-
-                elif dataHandler['state'] == 3:
-                    dataHandler['message_length_expected'] = data # 4th byte
-                    if dataHandler['message_length_expected'] == MSPy.JUMBO_FRAME_SIZE_LIMIT:
-                        logging.debug("JumboFrame received.")
-                        dataHandler['messageIsJumboFrame'] = True
-
-                    # start the checksum procedure
-                    dataHandler['message_checksum'] = data
-                    dataHandler['state'] = 4
-
-                elif dataHandler['state'] == 3.1: # MSP V2: msg length LOW
-                    dataHandler['message_length_expected'] = data
-                    dataHandler['state'] = 3.2
-
-                elif dataHandler['state'] == 3.2: # MSP V2: msg length HIGH
-                    dataHandler['message_length_expected'] |= data << 8
-                    # setup buffer according to the message_length_expected
-                    dataHandler['message_buffer_uint8_view'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                    if dataHandler['message_length_expected'] > 0:
-                        dataHandler['state'] = 7
-                        received_bytes += local_read(dataHandler['message_length_expected']+2) # +2 for CRC
-                    else:
-                        dataHandler['state'] = 9
-                        received_bytes += local_read(2) # 2 for CRC
-
-                elif dataHandler['state'] == 4:
-                    dataHandler['code'] = data
-                    dataHandler['message_checksum'] ^= data
-
-                    if dataHandler['message_length_expected'] > 0:
-                        # process payload
-                        if dataHandler['messageIsJumboFrame']:
-                            dataHandler['state'] = 5
-                            received_bytes += local_read()
-                        else:
-                            received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
-                            dataHandler['state'] = 7
-                    else:
-                        # no payload
-                        dataHandler['state'] = 9
-                        received_bytes += local_read()
-
-                elif dataHandler['state'] == 5:
-                    # this is a JumboFrame
-                    dataHandler['message_length_expected'] = data
-
-                    dataHandler['message_checksum'] ^= data
-
-                    dataHandler['state'] = 6
-                    received_bytes += local_read()
-
-                elif dataHandler['state'] == 6:
-                    # calculates the JumboFrame size
-                    dataHandler['message_length_expected'] +=  256 * data
-                    logging.debug("JumboFrame message_length_expected: {}".format(dataHandler['message_length_expected']))
-                    # There's no way to check for transmission errors here...
-                    # In the worst scenario, it will try to read 255 + 256*255 = 65535 bytes
-
-                    dataHandler['message_checksum'] ^= data
-
-                    dataHandler['state'] = 7
-                    received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
-
-                elif dataHandler['state'] == 7:
-                    # setup buffer according to the message_length_expected
-                    dataHandler['message_buffer'] = bytearray(dataHandler['message_length_expected'])
-                    dataHandler['message_buffer_uint8_view'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-
-                    # payload
-                    dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = data
-                    dataHandler['message_checksum'] ^= data
-                    dataHandler['message_length_received'] += 1
-
-                    if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
-                        dataHandler['state'] = 9
-                    else:
-                        dataHandler['state'] = 8
-
-                elif dataHandler['state'] == 8:
-                    # payload
-                    dataHandler['message_buffer_uint8_view'][dataHandler['message_length_received']] = data
-                    dataHandler['message_checksum'] ^= data
-                    dataHandler['message_length_received'] += 1
-
-                    if dataHandler['message_length_received'] == dataHandler['message_length_expected']:
-                        dataHandler['state'] = 9
-
-                elif dataHandler['state'] == 9:
-                        if dataHandler['msp_version'] == 1:
-                            if dataHandler['message_checksum'] == data:
-                                # checksum is correct, message received, store dataview
-                                logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
-                                dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                                return dataHandler
-                            else:
-                                # wrong checksum
-                                logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
-                                                                                                            data,
-                                                                                                            dataHandler['message_checksum']))
-                                dataHandler['crcError'] = True
-                                break # sends it to the error state
-                        elif dataHandler['msp_version'] == 2:
-                            dataHandler['message_checksum'] = 0
-                            dataHandler['message_checksum'] = self._crc8_dvb_s2(dataHandler['message_checksum'], 0) # flag
-                            dataHandler['message_checksum'] = self._crc8_dvb_s2(dataHandler['message_checksum'], dataHandler['code'] & 0xFF) # code LOW
-                            dataHandler['message_checksum'] = self._crc8_dvb_s2(dataHandler['message_checksum'], (dataHandler['code'] & 0xFF00) >> 8) # code HIGH
-                            dataHandler['message_checksum'] = self._crc8_dvb_s2(dataHandler['message_checksum'], dataHandler['message_length_expected'] & 0xFF) #  HIGH
-                            dataHandler['message_checksum'] = self._crc8_dvb_s2(dataHandler['message_checksum'], (dataHandler['message_length_expected'] & 0xFF00) >> 8) #  HIGH
-                            for si in range(dataHandler['message_length_received']):
-                                dataHandler['message_checksum'] = self._crc8_dvb_s2(dataHandler['message_checksum'], dataHandler['message_buffer'][si])
-                            if dataHandler['message_checksum'] == data:
-                                # checksum is correct, message received, store dataview
-                                logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
-                                dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                                return dataHandler
-                            else:
-                                # wrong checksum
-                                logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
-                                                                                                            data,
-                                                                                                            dataHandler['message_checksum']))
-                                dataHandler['crcError'] = True
-                                break # sends it to the error state
-
-            # it means an error occurred
-            logging.debug('Error detected on state: {}'.format(dataHandler['state']))
-            dataHandler['packet_error'] = 1
-
-            return dataHandler
+        with self.port_read_lock:
+            return msp_ctrl.receive_msg(self.read, logging)
 
 
     @staticmethod
@@ -1325,6 +870,8 @@ class MSPy:
                 unpack_format = 'f'
             else:
                 unpack_format = 'i'
+        else:
+            raise ValueError('size must be 8, 16 or 32')
         
         if unsigned:
             unpack_format = unpack_format.upper()
@@ -1455,88 +1002,15 @@ class MSPy:
 
 
     def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
-        """Send a RAW MSP message through the serial port
-        Based on betaflight-configurator (https://git.io/fjRxz)
-
-        Parameters
-        ----------
-        code : int
-            MSP Code
-        
-        data: list or bytearray, optional
-            Data to be sent (default is [])
-            
-        Returns
-        -------
-        int
-            number of bytes of data actually written (including 6 bytes header)
-        """
-
-        res = -1
-
-        # Always reserve 6 bytes for protocol overhead
-        # $ + M + < + data_length + msg_code + data + msg_crc
-        len_data = len(data)
-        if code < 255: # MSP V1
-            size = len_data + 6
-            checksum = 0
-
-            bufView = bytearray([0]*size)
-
-            bufView[0] = 36 #$
-            bufView[1] = 77 #M
-            bufView[2] = 60 #<
-            bufView[3] = len_data
-            bufView[4] = code
-
-            checksum = bufView[3] ^ bufView[4]
-
-            for i in range(len_data):
-                bufView[i + 5] = data[i]
-                checksum ^= bufView[i + 5]
-
-            bufView[-1] = checksum
-
-        elif code > 255: # MSP V2
-            size = len_data + 9
-            checksum = 0
-            bufView = bytearray([0]*size)
-            bufView[0] = 36 #$ 
-            bufView[1] = 88 #X
-            bufView[2] = 60 #<
-            bufView[3] = 0 #flag: reserved, set to 0
-            bufView[4] = code & 0xFF #code lower byte
-            bufView[5] = (code & 0xFF00) >> 8 #code upper byte
-            bufView[6] = len_data & 0xFF #len_data lower byte
-            bufView[7] = (len_data & 0xFF00) >> 8 #len_data upper byte
-            for di in range(len_data):
-                bufView[8+di] = data[di]
-            for si in range(3, size-1):
-                checksum = self._crc8_dvb_s2(checksum, bufView[si])
-            bufView[-1] = checksum
-
-        if self.serial_port_write_lock.acquire(blocking, timeout):
-            try:
-                res = self.conn.write(bufView)
-            finally:
-                self.serial_port_write_lock.release()
-                if res>0:
-                    logging.debug("RAW message sent: {}".format(bufView))
-
-                return res
+        bufView = msp_ctrl.prepare_RAW_msg(code, data)
+        res = 0
+        try:
+            res = self.write(bufView)
+        finally:
+            if res>0:
+                logging.debug("RAW message sent: {}".format(bufView))
+            return res
     
-    @staticmethod
-    def _crc8_dvb_s2(crc, ch):
-        """CRC for MSPV2
-        *copied from inav-configurator
-        """
-        crc ^= ch
-        for _ in range(8):
-            if (crc & 0x80):
-                crc = ((crc << 1) & 0xFF) ^ 0xD5
-            else:
-                crc = (crc << 1) & 0xFF
-        return crc
 
     def process_recv_data(self, dataHandler):
         """Process the dataHandler from receive_msg consuming (pop!) dataHandler['dataView'] as it goes.
