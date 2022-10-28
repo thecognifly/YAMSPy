@@ -268,6 +268,10 @@ def prepare_RAW_msg(mspv, code, data=[]):
     # Always reserve 6 bytes for protocol overhead
     # $ + M + < + data_length + msg_code + data + msg_crc
     len_data = len(data)
+
+    if len_data > 256: # this shouldn't be needed...
+        mspv = 2
+
     if mspv==1: # MSP V1
         size = len_data + 6
         checksum = 0
