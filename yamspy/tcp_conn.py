@@ -20,7 +20,7 @@ class TCPSocket:
             self.sock = sock
         self.closed = False
 
-    def connect(self, host=5761, port='127.0.0.1', timeout=1/1000):
+    def connect(self, host=5761, port='127.0.0.1', timeout=1/500):
         self.sock.connect((port, host))
         self.sock.settimeout(timeout)
         self.closed = False
@@ -31,7 +31,7 @@ class TCPSocket:
             raise RuntimeError("socket connection broken")
         return sent
 
-    def receive(self, MSGLEN = 1):
+    def receive(self, MSGLEN = 1024):
         try:
             recvbuffer = self.sock.recv(MSGLEN)
         except socket.timeout:

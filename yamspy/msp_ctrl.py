@@ -55,26 +55,31 @@ def receive_msg(local_read, logging):
     """
 
     dataHandler = dataHandler_init.copy()
-    received_bytes = receive_raw_msg(local_read, logging, size=3)
-    if not received_bytes:
-        logging.warning("receive_msg got nothing...")
-        return dataHandler
-    dataHandler['last_received_timestamp'] = time.time()
 
+    # received_bytes = receive_raw_msg(local_read, logging, size=3)
+    # if not received_bytes:
+    #     logging.warning("receive_msg got nothing...")
+    #     return dataHandler
+    # dataHandler['last_received_timestamp'] = time.time()
     di = 0
     while True:
         try:
-            data = received_bytes[di]
+            if di == 0:
+                received_bytes = local_read()
+                if received_bytes:
+                    dataHandler['last_received_timestamp'] = time.time()
+                    data = received_bytes[di]
+                else:
+                    break
+            else:
+                data = received_bytes[di]
+
             di += 1
-            logging.debug("State: {1} - byte received (at {0}): {2}".format(dataHandler['last_received_timestamp'], 
-                                                                    dataHandler['state'], 
-                                                                    data))
+            logging.info(f"State: {dataHandler['state']} - byte received (at {dataHandler['last_received_timestamp']}): {data}")
         except IndexError:
-            # Instead of crashing everything, let's just ignore this msg...
-            # ... and hope for the best :)
-            logging.debug('IndexError detected on state: {}'.format(dataHandler['state']))
-            dataHandler['state'] = -1
-            break # Sends it to the error state
+            logging.info('IndexError detected on state: {}'.format(dataHandler['state']))
+            di = 0 # reads more data
+            continue
 
         # it will always fall in the first state by default
         if dataHandler['state'] == 0: # sync char 1
@@ -107,10 +112,10 @@ def receive_msg(local_read, logging):
                     
                 if dataHandler['msp_version'] == 1:
                     dataHandler['state'] = 3
-                    received_bytes += local_read(2)
+                    #received_bytes += local_read(2)
                 elif dataHandler['msp_version'] == 2:
                     dataHandler['state'] = 2.1
-                    received_bytes += local_read(5)
+                    #received_bytes += local_read(5)
 
         elif dataHandler['state'] == 2.1: # MSP V2: flag (ignored)
             dataHandler['flags'] = data # 4th byte 
@@ -144,10 +149,10 @@ def receive_msg(local_read, logging):
             dataHandler['message_buffer_uint8_view'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
             if dataHandler['message_length_expected'] > 0:
                 dataHandler['state'] = 7
-                received_bytes += local_read(dataHandler['message_length_expected']+2) # +2 for CRC
+                #received_bytes += local_read(dataHandler['message_length_expected']+2) # +2 for CRC
             else:
                 dataHandler['state'] = 9
-                received_bytes += local_read(2) # 2 for CRC
+                #received_bytes += local_read(2) # 2 for CRC
 
         elif dataHandler['state'] == 4:
             dataHandler['code'] = data
@@ -157,14 +162,14 @@ def receive_msg(local_read, logging):
                 # process payload
                 if dataHandler['messageIsJumboFrame']:
                     dataHandler['state'] = 5
-                    received_bytes += local_read()
+                    #received_bytes += local_read()
                 else:
                     dataHandler['state'] = 7
-                    received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
+                    #received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
             else:
                 # no payload
                 dataHandler['state'] = 9
-                received_bytes += local_read()
+                #received_bytes += local_read()
 
         elif dataHandler['state'] == 5:
             # this is a JumboFrame
@@ -173,7 +178,7 @@ def receive_msg(local_read, logging):
             dataHandler['message_checksum'] ^= data
 
             dataHandler['state'] = 6
-            received_bytes += local_read()
+            #received_bytes += local_read()
 
         elif dataHandler['state'] == 6:
             # calculates the JumboFrame size
@@ -185,7 +190,7 @@ def receive_msg(local_read, logging):
             dataHandler['message_checksum'] ^= data
 
             dataHandler['state'] = 7
-            received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
+            #received_bytes += local_read(dataHandler['message_length_expected']+1) # +1 for CRC
 
         elif dataHandler['state'] == 7:
             # setup buffer according to the message_length_expected
@@ -254,7 +259,7 @@ def receive_msg(local_read, logging):
     return dataHandler
 
 
-def prepare_RAW_msg(code, data=[]):
+def prepare_RAW_msg(mspv, code, data=[]):
     """Send a RAW MSP message through the serial port
     Based on betaflight-configurator (https://git.io/fjRxz)
 
@@ -277,7 +282,7 @@ def prepare_RAW_msg(code, data=[]):
     # Always reserve 6 bytes for protocol overhead
     # $ + M + < + data_length + msg_code + data + msg_crc
     len_data = len(data)
-    if code <= 255: # MSP V1
+    if mspv==1: # MSP V1
         size = len_data + 6
         checksum = 0
 
@@ -297,7 +302,7 @@ def prepare_RAW_msg(code, data=[]):
 
         bufView[-1] = checksum
 
-    elif code > 255: # MSP V2
+    elif mspv==2: # MSP V2
         size = len_data + 9
         checksum = 0
         bufView = bytearray([0]*size)
