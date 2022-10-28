@@ -7,30 +7,7 @@ one port.
 It would be useful if this same script could have the option to log all the communication
 for debugging showing which app sent/received.
 
-PROBLEM:
-A naive implementation could simply broadcast the messages received from the FC to all apps,
-and just forward any received information from the apps to the FC.
-However, there are some caveats:
-1. MSP messages can't be mixed or the state machine will fail.
-2. The apps were written expecting they were the only thing connected to that port
-therefore they may await for an acknowledgement from the FC.
-
-SOLUTION:
-1. Speak MSP, or at least understand when a message starts / ends
-2. Always wait for a reply from the FC
-3. Buffer other messages
-
-Assumptions:
-1. I am considering the scenario where the FC never sends a message without being asked.
-2. The TCP server will use one server (port) per client
-
-Listen to clients using one thread per client.
-Process and buffer messages received from client.
-First message to be processed until the end is sent to the FC. It will wait until the FC answers 
-or timeout before it can send another message.
-
-
-
+$ python -m yamspy.msp_proxy --ports 54310 54320
 """
 
 import logging
@@ -43,8 +20,8 @@ from multiprocessing import Process, Pipe
 
 import serial
 
-import msp_ctrl
-import msp_codes
+from . import msp_ctrl
+from . import msp_codes
 
 
 logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
