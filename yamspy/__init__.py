@@ -165,7 +165,9 @@ class MSPy:
 
         self.CURRENT_METERS = []
 
-        self.BATTERY_STATE = {}
+        self.BATTERY_STATE = {
+            'cellCount':                  0,
+        }
 
         self.SENSOR_ALIGNMENT = {
             'align_gyro':                 0,
@@ -673,7 +675,7 @@ class MSPy:
         for _ in range(trials):
             try:
                 if self.use_tcp:
-                    self.start(host=self.device, timeout=self.timeout)
+                    self.start(port=self.device, timeout=self.timeout)
                 else:
                     self.start()
 
@@ -705,7 +707,7 @@ class MSPy:
         basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 
                                'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
         if self.INAV:
-            basic_info_cmd_list.append('MSPV2_INAV_ANALOG')
+            basic_info_cmd_list.append('MSP2_INAV_ANALOG')
             basic_info_cmd_list.append('MSP_VOLTAGE_METER_CONFIG')
 
         for msg in basic_info_cmd_list:
@@ -795,7 +797,7 @@ class MSPy:
                 msg = self.receive_raw_msg(size = (6+data_length))[5:]
                 converted_msg = struct.unpack('<B2Hh', msg[:-1])
 
-            self.ANALOG['voltage'] = converted_msg[0] / 10 # iNAV uses a MSPV2 message to get a precise value.
+            self.ANALOG['voltage'] = converted_msg[0] / 10 # iNAV uses a MSP2 message to get a precise value.
             self.ANALOG['mAhdrawn'] = converted_msg[1]
             self.ANALOG['rssi'] = converted_msg[2] # 0-1023
             self.ANALOG['amperage'] = converted_msg[3] / 100 # A
@@ -1002,7 +1004,8 @@ class MSPy:
 
 
     def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
-        bufView = msp_ctrl.prepare_RAW_msg(code, data)
+        mspv = 1 if code <= 255 else 2
+        bufView = msp_ctrl.prepare_RAW_msg(mspv, code, data)
         res = 0
         try:
             res = self.write(bufView)
@@ -1170,7 +1173,7 @@ class MSPy:
         if not self.INAV:
             self.ANALOG['voltage'] = self.readbytes(data, size=16, unsigned=True) / 100
     
-    def process_MSPV2_INAV_ANALOG(self, data):
+    def process_MSP2_INAV_ANALOG(self, data):
         if self.INAV:
             tmp = self.readbytes(data, size=8, unsigned=True)
             self.ANALOG['battery_full_when_plugged_in'] = True if (tmp & 1) else False
@@ -1357,7 +1360,7 @@ class MSPy:
             self.MISC['vbatmaxcellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
             self.MISC['vbatwarningcellvoltage'] = self.readbytes(data, size=8, unsigned=True) / 10 # 10-50
 
-    def process_MSPV2_INAV_MISC(self, data):
+    def process_MSP2_INAV_MISC(self, data):
         if self.INAV:
             self.MISC['midrc'] = self.RX_CONFIG['midrc'] = self.readbytes(data, size=16, unsigned=True)
             self.MISC['minthrottle'] = self.MOTOR_CONFIG['minthrottle'] = self.readbytes(data, size=16, unsigned=True) # 0-2000

@@ -57,7 +57,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
         # to avoid "Address already in use" when the port is actually free
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.settimeout(timeout)
-        #s.setblocking(False)
+        s.setblocking(True)
         s.bind((HOST, PORT))
         s.listen()
         while True:
@@ -65,7 +65,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
                 conn, addr = s.accept()
                 conn.settimeout(timeout)
             except socket.timeout:
-                sleep(timeout)
+                sleep(1/10)
                 continue
             
             with conn:
@@ -76,7 +76,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
                     while True:
                         try:
                             data = conn.recv(1)
-                            logging.info(f"Socket ({addr}) received data {data}")
+                            logging.debug(f"[{PORT}] Socket ({addr}) received data {data}")
                             if data:
                                 recvbuffer += data
                                 di += 1
@@ -84,28 +84,32 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
                                 conn.close() # no data for SOCK_STREAM = dead
                                 break
                         except socket.timeout:
-                            logging.info(f"Socket ({addr}) socket.timeout")
+                            logging.debug(f"[{PORT}] Socket ({addr}) socket.timeout: {recvbuffer}")
                             break
-                    logging.debug(f"Socket ({addr}) returned recvbuffer {recvbuffer}")
+                    logging.debug(f"[{PORT}] Socket ({addr}) returned recvbuffer {recvbuffer}")
                     return recvbuffer
 
                 def send(msg):
-                    sent = 0
                     try:
-                        sent = conn.send(msg)
+                        conn.sendall(msg)
                     except BrokenPipeError:
                         logging.warning(f"Socket connection broken while sending {addr}")
-                    return sent
+                        return False
+                    return True
 
                 while conn.fileno()>0:
                     # this is a slow operation... but it's needed to know
                     # where a message starts / ends
                     tic = monotonic()
                     pc2fc = msp_ctrl.receive_msg(receive, logging)
-                    logging.warning(f"[{PORT}] {msp_codes.MSPCodes2Str[pc2fc['code']]} message_direction={'FC2PC' if pc2fc['message_direction'] else 'PC2FC'}, payload={len(pc2fc['dataView'])}, packet_error={pc2fc['packet_error']}")
-                    logging.warning(f"[{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
+                    logging.debug(f"[{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
+                    logging.debug(f"[{PORT}] {msp_codes.MSPCodes2Str[pc2fc['code']]} message_direction={'FC2PC' if pc2fc['message_direction'] else 'PC2FC'}, payload={len(pc2fc['dataView'])}, packet_error={pc2fc['packet_error']}")
                     if pc2fc['packet_error'] == 0:
                         pipe.send(pc2fc)
+                    else:
+                        logging.debug(f"[{PORT}] packet_error!!!!")
+
+                    if pipe.poll():
                         fc2pc = pipe.recv() # blocking
                         # process
                         bufView = msp_ctrl.prepare_RAW_msg(fc2pc['msp_version'], fc2pc['code'], fc2pc['dataView'])
@@ -113,12 +117,10 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
                         try:
                             res = send(bufView)
                         finally:
-                            if res>0:
+                            if res:
                                 logging.debug(f"RAW message sent: {bufView}")
                             else:
                                 break
-                    else:
-                        logging.warning(f"[{PORT}] packet_error!!!!")
 
                     sleep(1/1000)
 
@@ -131,7 +133,7 @@ def main(ports, device, baudrate, timeout=1/1000):
     try:
         sconn = serial.Serial(port = device, baudrate = baudrate,
                             bytesize = serial.EIGHTBITS, parity = serial.PARITY_NONE,
-                            stopbits = serial.STOPBITS_ONE, timeout = timeout,
+                            stopbits = serial.STOPBITS_ONE, timeout = 1,
                             xonxoff = False, rtscts = False, dsrdtr = False, writeTimeout = timeout
                             )
 
@@ -140,14 +142,18 @@ def main(ports, device, baudrate, timeout=1/1000):
         logging.warning(f"Error opening the serial port ({device}): {err}")
 
     def ser_read():
+        data = b''
         try:
-            data = sconn.read(sconn.inWaiting())
+            data = sconn.read(1) # blocking
+            buffer_available = sconn.inWaiting()
+            if buffer_available:
+                data += sconn.read(buffer_available)
             return data
         except serial.SerialTimeoutException as err:
             logging.warning(f"Error reading from the serial port ({device}): {err}")
-            return []
+            return data
 
-    servers = []
+    servers = {}
     for p in ports:
         pipe_local, pipe_thread = Pipe()
         HOST = '127.0.0.1'
@@ -157,32 +163,42 @@ def main(ports, device, baudrate, timeout=1/1000):
         server_thread.daemon = True
         server_thread.start()
         logging.warning(f"Listening on port {PORT} in thread {server_thread.name}")
-        servers.append([server_thread, pipe_local, pipe_thread, HOST, PORT])
+        servers[PORT] = [server_thread, pipe_local, pipe_thread, HOST]
 
+    last_msg = None
     while True:
-        for server_thread, pipe_local, pipe_thread, HOST, PORT in servers:
+        for PORT in servers:
+            server_thread, pipe_local, pipe_thread, HOST = servers[PORT]
             if server_thread.is_alive():
                 if pipe_local.poll():
                     pc2fc = pipe_local.recv()
                     # send this message to the FC
                     bufView = msp_ctrl.prepare_RAW_msg(pc2fc['msp_version'], pc2fc['code'], pc2fc['dataView'])
-                    res = 0
-                    try:
-                        res = sconn.write(bufView)
-                    finally:
-                        if res>0:
-                            logging.info(f"RAW message sent: {bufView}")
-                        else:
-                            raise RuntimeError("RAW message not sent")
-                    # wait for a response from the FC
+                    if last_msg == None:
+                        res = 0
+                        try:
+                            res = sconn.write(bufView)
+                        finally:
+                            if res>0:
+                                logging.debug(f"[MAIN-{PORT}] RAW message sent: {bufView}")
+                                last_msg = PORT
+                            else:
+                                raise RuntimeError(f"[MAIN-{PORT}] RAW message not sent")
+                if last_msg == PORT:
+                    # Check for a response from the FC
                     tic = monotonic()
                     fc2pc = msp_ctrl.receive_msg(ser_read, logging)
-                    logging.warning(f"[MAIN] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
-                    logging.warning(f"[MAIN] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
-                    pipe_local.send(fc2pc)
+                    last_msg = None
+                    logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
+                    logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
+                    if fc2pc['packet_error'] == 0:
+                        pipe_local.send(fc2pc)
+                    else:
+                        logging.debug(f"[MAIN-{PORT}] packet_error!!!!")
+                    last_msg = None
             else:
                 raise RuntimeError(f"Server for {HOST, PORT} died!")
-        sleep(1/500)
+        sleep(1/1000)
 
 
 if __name__ == '__main__':
@@ -191,7 +207,7 @@ if __name__ == '__main__':
     parser.add_argument('--serial', type=str, nargs='*', default='/dev/ttyACM0',
                                     help='Serial port to connect to the FC.')
 
-    parser.add_argument('--ports', type=int, nargs='+', required=True,
+    parser.add_argument('--ports', type=int, nargs='+', default=[54310],
                                    help='TCP ports to use for each client (do not share!)')
 
     parser.add_argument('--baudrate', type=int,  default=115200,
@@ -214,4 +230,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-    main(args.ports, args.serial, args.baudrate, timeout=1/100)
+    main(args.ports, args.serial, args.baudrate, timeout=1/1000)

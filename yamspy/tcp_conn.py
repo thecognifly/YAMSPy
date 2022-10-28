@@ -20,8 +20,8 @@ class TCPSocket:
             self.sock = sock
         self.closed = False
 
-    def connect(self, host=5761, port='127.0.0.1', timeout=1/500):
-        self.sock.connect((port, host))
+    def connect(self, host='127.0.0.1', port=54320, timeout=1/500):
+        self.sock.connect((host, port))
         self.sock.settimeout(timeout)
         self.closed = False
 
