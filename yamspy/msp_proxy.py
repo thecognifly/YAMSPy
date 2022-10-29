@@ -116,7 +116,8 @@ def main(ports, device, baudrate, timeout=1/1000):
 
         logging.info("Serial port open!")
     except serial.SerialException as err:
-        logging.warning(f"Error opening the serial port ({device}): {err}")
+        logging.warning(f"Error opening the serial port {device}.\n{err}")
+        exit(1)
 
     def ser_read():
         data = b''
