@@ -31,11 +31,15 @@ class TCPSocket:
             raise RuntimeError("socket connection broken")
         return sent
 
-    def receive(self, MSGLEN = 1024):
+    def receive(self, MSGLEN = None):
+        recvbuffer = b''
         try:
-            recvbuffer = self.sock.recv(MSGLEN)
+            if MSGLEN:
+                recvbuffer = self.sock.recv(MSGLEN)
+            else:
+                recvbuffer = self.sock.recv(self.buffersize)
         except socket.timeout:
-            return
+            return recvbuffer
         if not recvbuffer:
             raise RuntimeError("socket connection broken")
 
