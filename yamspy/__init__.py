@@ -47,7 +47,7 @@ import logging
 import struct
 import time
 import sys
-from serial import SerialException
+from select import select
 
 from threading import Lock, RLock
 
@@ -57,6 +57,8 @@ if "linux" in sys.platform:
 else:
     def ffs(x): # modified from https://stackoverflow.com/a/36059264
         return (x&-x).bit_length()
+
+from serial import SerialException
 
 from . import msp_ctrl
 from . import msp_codes
@@ -608,28 +610,20 @@ class MSPy:
             self.conn.dsrdtr = False
             self.conn.writeTimeout = 1
             self.write = self.conn.write
-            self.read = self.conn.read
+
+            def ser_read():
+                _,_,_ = select([self.conn],[],[])  # wait for data
+                data = b''
+                data = self.conn.read(self.conn.inWaiting()) # blocking
+                return data
+            self.read = ser_read
             self.start = self.conn.open
-            # For some reason, passing the arguments doesn't work and
-            # the serial fails...
-            # self.conn = serial.Serial(port=device,
-            #                           baudrate=baudrate,
-            #                           bytesize=serial.EIGHTBITS,
-            #                           parity=serial.PARITY_NONE,
-            #                           stopbits=serial.STOPBITS_ONE,
-            #                           timeout=0, # 0 for non-blocking mode (read)
-            #                           xonxoff=False,
-            #                           rtscts=False,
-            #                           write_timeout=1, # it will raise serial.SerialTimeoutException
-            #                           dsrdtr=False,
-            #                           inter_byte_timeout=None,
-            #                           exclusive=None)
 
         
         else :
             from .tcp_conn import TCPSocket
             socket = TCPSocket()
-            self.conn = socket        
+            self.conn = socket
             self.write = self.conn.send
             self.read = self.conn.receive
             self.start = self.conn.connect
