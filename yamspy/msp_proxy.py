@@ -35,6 +35,8 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # to avoid "Address already in use" when the port is actually free
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        buffersize = s.getsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF)
         s.settimeout(False)
         s.setblocking(True)
         s.bind((HOST, PORT))
@@ -47,21 +49,9 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
                 def receive():
                     logging.debug(f"[{PORT}] waiting for data to be received from PC...")
                     _,_,_ = select([conn],[],[])  # wait for data
-                    recvbuffer = b''
-                    data_len = 0
-                    while True:
-                        try:
-                            data = conn.recv(1)
-                            logging.debug(f"[{PORT}] Socket ({addr}) received data {data}")
-                            if data:
-                                recvbuffer += data
-                                data_len += 1
-                            elif data_len==0:
-                                conn.close() # no data for SOCK_STREAM = dead
-                                break
-                        except socket.timeout:
-                            logging.debug(f"[{PORT}] Socket ({addr}) socket.timeout: {recvbuffer}")
-                            break
+                    recvbuffer = conn.recv(buffersize) # read all buffer
+                    if not recvbuffer:
+                        conn.close() # no data for SOCK_STREAM = dead
                     logging.debug(f"[{PORT}] Socket ({addr}) returned recvbuffer {recvbuffer}")
                     return recvbuffer
 
@@ -114,16 +104,10 @@ def main(ports, device, baudrate, timeout=1/1000):
         exit(1)
 
     def ser_read():
+        _,_,_ = select([sconn],[],[])  # wait for data
         data = b''
-        try:
-            data += sconn.read(1) # blocking
-            buffer_available = sconn.inWaiting()
-            if buffer_available:
-                data += sconn.read(buffer_available)
-            return data
-        except serial.SerialTimeoutException as err:
-            logging.warning(f"Error reading from the serial port ({device}): {err}")
-            return data
+        data = sconn.read(sconn.inWaiting()) # blocking
+        return data
 
     servers = {}
     for p in ports:
