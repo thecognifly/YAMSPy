@@ -10,6 +10,7 @@ for debugging showing which app sent/received.
 $ python -m yamspy.msp_proxy --ports 54310 54320
 """
 
+from curses import raw
 import logging
 import argparse
 import socket
@@ -17,6 +18,7 @@ import sys
 from time import sleep, monotonic
 from threading import Lock
 from multiprocessing import Process, Pipe
+from select import select
 
 import serial
 
@@ -33,31 +35,28 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # to avoid "Address already in use" when the port is actually free
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.settimeout(timeout)
+        s.settimeout(False)
         s.setblocking(True)
         s.bind((HOST, PORT))
         s.listen()
         while True:
-            try:
-                conn, addr = s.accept()
-                conn.settimeout(timeout)
-            except socket.timeout:
-                sleep(1/10)
-                continue
-            
+            conn, addr = s.accept()
+            conn.settimeout(timeout)
             with conn:
                 print(f"Connected by {(HOST, PORT)}")
                 def receive():
+                    logging.debug(f"[{PORT}] waiting for data to be received from PC...")
+                    _,_,_ = select([conn],[],[])  # wait for data
                     recvbuffer = b''
-                    di = 0
+                    data_len = 0
                     while True:
                         try:
                             data = conn.recv(1)
                             logging.debug(f"[{PORT}] Socket ({addr}) received data {data}")
                             if data:
                                 recvbuffer += data
-                                di += 1
-                            elif di==0:
+                                data_len += 1
+                            elif data_len==0:
                                 conn.close() # no data for SOCK_STREAM = dead
                                 break
                         except socket.timeout:
@@ -75,31 +74,26 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
                     return True
 
                 while conn.fileno()>0:
-                    # this is a slow operation... but it's needed to know
-                    # where a message starts / ends
                     tic = monotonic()
-                    pc2fc = msp_ctrl.receive_msg(receive, logging)
+                    # This is a slow operation... but it's needed to know
+                    # where a message starts / ends
+                    pc2fc, raw_bytes = msp_ctrl.receive_msg(receive, logging, output_raw_bytes=True)
                     logging.debug(f"[{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
                     logging.debug(f"[{PORT}] {msp_codes.MSPCodes2Str[pc2fc['code']]} message_direction={'FC2PC' if pc2fc['message_direction'] else 'PC2FC'}, payload={len(pc2fc['dataView'])}, packet_error={pc2fc['packet_error']}")
-                    if pc2fc['packet_error'] == 0:
-                        pipe.send(pc2fc)
-                    else:
+                    if pc2fc['packet_error'] != 0:
                         logging.debug(f"[{PORT}] packet_error!!!!")
-
-                    if pipe.poll():
-                        fc2pc = pipe.recv() # blocking
-                        # process
-                        bufView = msp_ctrl.prepare_RAW_msg(fc2pc['msp_version'], fc2pc['code'], fc2pc['dataView'])
-                        res = 0
-                        try:
-                            res = send(bufView)
-                        finally:
-                            if res:
-                                logging.debug(f"RAW message sent: {bufView}")
-                            else:
-                                break
-
-                    sleep(1/1000)
+                    if raw_bytes:
+                        pipe.send([PORT,raw_bytes])
+                        raw_bytes = pipe.recv() # blocking
+                        if raw_bytes:
+                            res = False
+                            try:
+                                res = send(raw_bytes)
+                            finally:
+                                if res:
+                                    logging.debug(f"[{PORT}] RAW message sent to PC: {raw_bytes}")
+                                else:
+                                    break
 
                 logging.warning(f"[{PORT}] Connection closed!")
 
@@ -110,19 +104,19 @@ def main(ports, device, baudrate, timeout=1/1000):
     try:
         sconn = serial.Serial(port = device, baudrate = baudrate,
                             bytesize = serial.EIGHTBITS, parity = serial.PARITY_NONE,
-                            stopbits = serial.STOPBITS_ONE, timeout = 1,
+                            stopbits = serial.STOPBITS_ONE, timeout = timeout,
                             xonxoff = False, rtscts = False, dsrdtr = False, writeTimeout = timeout
                             )
 
         logging.info("Serial port open!")
     except serial.SerialException as err:
-        logging.warning(f"Error opening the serial port {device}.\n{err}")
+        logging.error(f"Error opening the serial port {device}.\n{err}")
         exit(1)
 
     def ser_read():
         data = b''
         try:
-            data = sconn.read(1) # blocking
+            data += sconn.read(1) # blocking
             buffer_available = sconn.inWaiting()
             if buffer_available:
                 data += sconn.read(buffer_available)
@@ -143,40 +137,35 @@ def main(ports, device, baudrate, timeout=1/1000):
         logging.warning(f"Listening on port {PORT} in thread {server_thread.name}")
         servers[PORT] = [server_thread, pipe_local, pipe_thread, HOST]
 
-    last_msg = None
+    local_pipes = [v[1]for v in servers.values()]
     while True:
-        for PORT in servers:
-            server_thread, pipe_local, pipe_thread, HOST = servers[PORT]
-            if server_thread.is_alive():
-                if pipe_local.poll():
-                    pc2fc = pipe_local.recv()
-                    # send this message to the FC
-                    bufView = msp_ctrl.prepare_RAW_msg(pc2fc['msp_version'], pc2fc['code'], pc2fc['dataView'])
-                    if last_msg == None:
-                        res = 0
-                        try:
-                            res = sconn.write(bufView)
-                        finally:
-                            if res>0:
-                                logging.debug(f"[MAIN-{PORT}] RAW message sent: {bufView}")
-                                last_msg = PORT
-                            else:
-                                raise RuntimeError(f"[MAIN-{PORT}] RAW message not sent")
-                if last_msg == PORT:
-                    # Check for a response from the FC
-                    tic = monotonic()
-                    fc2pc = msp_ctrl.receive_msg(ser_read, logging)
-                    last_msg = None
-                    logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
-                    logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
-                    if fc2pc['packet_error'] == 0:
-                        pipe_local.send(fc2pc)
-                    else:
-                        logging.debug(f"[MAIN-{PORT}] packet_error!!!!")
-                    last_msg = None
-            else:
-                raise RuntimeError(f"Server for {HOST, PORT} died!")
-        sleep(1/1000)
+        (pipe_local,),_,_ = select(local_pipes,[],[])
+        PORT, raw_bytes = pipe_local.recv()
+        server_thread, _, pipe_thread, HOST = servers[PORT]
+        if server_thread.is_alive():
+            # send this message to the FC
+            res = 0
+            try:
+                res = sconn.write(raw_bytes)
+            finally:
+                if res>0:
+                    logging.debug(f"[MAIN-{PORT}] RAW message sent to FC: {raw_bytes}")
+                else:
+                    raise RuntimeError(f"[MAIN-{PORT}] RAW message not sent")
+
+            # Check for a response from the FC
+            tic = monotonic()
+            while True:
+                fc2pc, raw_bytes = msp_ctrl.receive_msg(ser_read, logging, output_raw_bytes=True)
+                logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
+                logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
+                if fc2pc['packet_error'] != 0:
+                    logging.debug(f"[MAIN-{PORT}] packet_error!!!!")
+                if raw_bytes:
+                    break
+            pipe_local.send(raw_bytes)
+        else:
+            raise RuntimeError(f"Server for {HOST, PORT} died!")
 
 
 if __name__ == '__main__':
@@ -207,5 +196,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-
-    main(args.ports, args.serial, args.baudrate, timeout=1/1000)
+    try:
+        main(args.ports, args.serial, args.baudrate, timeout=1/1000)
+    except KeyboardInterrupt:
+        print("\nBye!")
