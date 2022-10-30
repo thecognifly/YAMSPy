@@ -44,7 +44,7 @@ def receive_raw_msg(local_read, logging, size, timeout = 0.1):
 
     return msg_header + msg
 
-def receive_msg(local_read, logging):
+def receive_msg(local_read, logging, output_raw_bytes=False):
     """Receive an MSP message from the serial port
     Based on betaflight-configurator (https://git.io/fjRAz)
 
@@ -55,19 +55,25 @@ def receive_msg(local_read, logging):
     """
 
     dataHandler = dataHandler_init.copy()
+    if output_raw_bytes:
+        raw_bytes = b''
 
     di = 0
     while True:
         try:
             if di == 0:
-                received_bytes = local_read()
+                received_bytes = memoryview(local_read())
                 if received_bytes:
                     dataHandler['last_received_timestamp'] = time.time()
                     data = received_bytes[di]
+                    if output_raw_bytes:
+                        raw_bytes += received_bytes[di:di+1]
                 else:
                     break
             else:
                 data = received_bytes[di]
+                if output_raw_bytes:
+                    raw_bytes += received_bytes[di:di+1]
 
             di += 1
             logging.debug(f"State: {dataHandler['state']} - byte received (at {dataHandler['last_received_timestamp']}): {data}")
@@ -208,7 +214,7 @@ def receive_msg(local_read, logging):
                         # checksum is correct, message received, store dataview
                         logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
                         dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                        return dataHandler
+                        return dataHandler if not output_raw_bytes else dataHandler, raw_bytes
                     else:
                         # wrong checksum
                         logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
@@ -229,7 +235,7 @@ def receive_msg(local_read, logging):
                         # checksum is correct, message received, store dataview
                         logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
                         dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                        return dataHandler
+                        return dataHandler if not output_raw_bytes else dataHandler, raw_bytes
                     else:
                         # wrong checksum
                         logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
@@ -242,7 +248,7 @@ def receive_msg(local_read, logging):
     logging.debug('Error detected on state: {}'.format(dataHandler['state']))
     dataHandler['packet_error'] = 1
 
-    return dataHandler
+    return dataHandler if not output_raw_bytes else dataHandler, raw_bytes
 
 
 def prepare_RAW_msg(mspv, code, data=[]):
