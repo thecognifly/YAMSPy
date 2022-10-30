@@ -944,7 +944,7 @@ class MSPy:
 
     def reboot(self):
         logging.info("Reboot requested")
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_REBOOT'], data=[])
+        return self.send_RAW_msg(MSPy.MSPCodes['MSP_REBOOT'], data=[])
 
 
     def set_ARMING_DISABLE(self, armingDisabled=0, runawayTakeoffPreventionDisabled=0):
