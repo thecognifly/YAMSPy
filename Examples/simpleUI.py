@@ -261,7 +261,9 @@ def keyboard_controller(screen):
                     if board.send_RAW_msg(MSPy.MSPCodes[next_msg], data=[]):
                         dataHandler = board.receive_msg()
                         board.process_recv_data(dataHandler)
-                        
+                    else:
+                        next_msg = ''
+                         
                     if next_msg == 'MSP_ANALOG':
                         voltage = board.ANALOG['voltage']
                         voltage_msg = ""

@@ -204,20 +204,20 @@ def keyboard_controller(screen):
                     cursor_msg = 'Sending Arm command...'
                     CMDS['aux1'] = 1900
 
-                # #
-                # # The code below is expecting the drone to have the
-                # # modes set accordingly since everything is hardcoded.
-                # #
-                # elif char == ord('m') or char == ord('M'):
-                #     if CMDS['aux2'] <= 1300:
-                #         cursor_msg = 'Horizon Mode...'
-                #         CMDS['aux2'] = 1500
-                #     elif 1700 > CMDS['aux2'] > 1300:
-                #         cursor_msg = 'Flip Mode...'
-                #         CMDS['aux2'] = 2000
-                #     elif CMDS['aux2'] >= 1700:
-                #         cursor_msg = 'Angle Mode...'
-                #         CMDS['aux2'] = 1000
+                #
+                # The code below is expecting the drone to have the
+                # modes set accordingly since everything is hardcoded.
+                #
+                elif char == ord('m') or char == ord('M'):
+                    if CMDS['aux2'] <= 1300:
+                        cursor_msg = 'Horizon Mode...'
+                        CMDS['aux2'] = 1500
+                    elif 1700 > CMDS['aux2'] > 1300:
+                        cursor_msg = 'Flip Mode...'
+                        CMDS['aux2'] = 2000
+                    elif CMDS['aux2'] >= 1700:
+                        cursor_msg = 'Angle Mode...'
+                        CMDS['aux2'] = 1000
 
                 elif char == ord('w') or char == ord('W'):
                     CMDS['throttle'] = CMDS['throttle'] + 10 if CMDS['throttle'] + 10 <= 2000 else CMDS['throttle']
@@ -266,6 +266,8 @@ def keyboard_controller(screen):
                     if board.send_RAW_msg(MSPy.MSPCodes[next_msg], data=[]):
                         dataHandler = board.receive_msg()
                         board.process_recv_data(dataHandler)
+                    else:
+                        next_msg = ''
                         
                     if next_msg == 'MSP_ANALOG':
                         voltage = board.ANALOG['voltage']
