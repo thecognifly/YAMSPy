@@ -70,7 +70,7 @@ class MSPy:
     SIGNATURE_LENGTH = 32
 
     def __init__(self, device, baudrate=115200, trials=1, 
-                 logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG', timeout=1,
+                 logfilename='MSPy.log', logfilemode='a', loglevel='INFO', timeout=1/100,
                  use_tcp=False):
         """
         Parameters
