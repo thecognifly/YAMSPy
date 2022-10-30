@@ -608,7 +608,7 @@ class MSPy:
             self.conn.xonxoff = False
             self.conn.rtscts = False
             self.conn.dsrdtr = False
-            self.conn.writeTimeout = 1
+            self.conn.writeTimeout = self.timeout
             self.write = self.conn.write
 
             def ser_read():
