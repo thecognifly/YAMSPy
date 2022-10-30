@@ -214,7 +214,10 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                         # checksum is correct, message received, store dataview
                         logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
                         dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                        return dataHandler if not output_raw_bytes else dataHandler, raw_bytes
+                        if output_raw_bytes:
+                            return dataHandler, raw_bytes
+                        else:
+                            return dataHandler 
                     else:
                         # wrong checksum
                         logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
@@ -235,7 +238,10 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                         # checksum is correct, message received, store dataview
                         logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
                         dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                        return dataHandler if not output_raw_bytes else dataHandler, raw_bytes
+                        if output_raw_bytes:
+                            return dataHandler, raw_bytes
+                        else:
+                            return dataHandler 
                     else:
                         # wrong checksum
                         logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
@@ -248,7 +254,10 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
     logging.debug('Error detected on state: {}'.format(dataHandler['state']))
     dataHandler['packet_error'] = 1
 
-    return dataHandler if not output_raw_bytes else dataHandler, raw_bytes
+    if output_raw_bytes:
+        return dataHandler, raw_bytes
+    else:
+        return dataHandler 
 
 
 def prepare_RAW_msg(mspv, code, data=[]):
