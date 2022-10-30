@@ -31,7 +31,7 @@ logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
                     stream=sys.stdout)
 
 
-def TCPServer(pipe, HOST, PORT, timeout=1/10000):
+def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # to avoid "Address already in use" when the port is actually free
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -64,6 +64,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
                     return True
 
                 while conn.fileno()>0:
+                    sleep(time2sleep)
                     tic = monotonic()
                     # This is a slow operation... but it's needed to know
                     # where a message starts / ends
@@ -91,6 +92,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000):
 
 
 def main(ports, device, baudrate, timeout=1/1000):
+    time2sleep = len(ports)*timeout
     try:
         sconn = serial.Serial(port = device, baudrate = baudrate,
                             bytesize = serial.EIGHTBITS, parity = serial.PARITY_NONE,
@@ -123,7 +125,8 @@ def main(ports, device, baudrate, timeout=1/1000):
 
     local_pipes = [v[1]for v in servers.values()]
     while True:
-        (pipe_local,),_,_ = select(local_pipes,[],[])
+        pipes,_,_ = select(local_pipes,[],[])
+        pipe_local = pipes[0]
         PORT, raw_bytes = pipe_local.recv()
         server_thread, _, pipe_thread, HOST = servers[PORT]
         if server_thread.is_alive():
