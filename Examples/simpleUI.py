@@ -52,7 +52,7 @@ from itertools import cycle
 from yamspy import MSPy
 
 # Max periods for:
-CTRL_LOOP_TIME = 1/100
+CTRL_LOOP_TIME = 1/1000
 SLOW_MSGS_LOOP_TIME = 1/5 # these messages take a lot of time slowing down the loop...
 
 NO_OF_CYCLES_AVERAGE_GUI_TIME = 10
@@ -69,7 +69,7 @@ NO_OF_CYCLES_AVERAGE_GUI_TIME = 10
 # https://pyserial.readthedocs.io/en/latest/shortintro.html
 #
 #
-SERIAL_PORT = "/dev/serial0"
+SERIAL_PORT = "/dev/ttyACM0"
 
 def run_curses(external_function):
     result=1
@@ -139,17 +139,18 @@ def keyboard_controller(screen):
                             'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
 
             if board.INAV:
-                command_list.append('MSPV2_INAV_ANALOG')
+                command_list.append('MSP2_INAV_ANALOG')
                 command_list.append('MSP_VOLTAGE_METER_CONFIG')
 
             for msg in command_list: 
-                if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+                code_value = MSPy.MSPCodes[msg]
+                if board.send_RAW_msg(code_value, data=[]):
                     dataHandler = board.receive_msg()
                     board.process_recv_data(dataHandler)
             if board.INAV:
                 cellCount = board.BATTERY_STATE['cellCount']
             else:
-                cellCount = 0 # MSPV2_INAV_ANALOG is necessary
+                cellCount = 0 # MSP2_INAV_ANALOG is necessary
             min_voltage = board.BATTERY_CONFIG['vbatmincellvoltage']*cellCount
             warn_voltage = board.BATTERY_CONFIG['vbatwarningcellvoltage']*cellCount
             max_voltage = board.BATTERY_CONFIG['vbatmaxcellvoltage']*cellCount

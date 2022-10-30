@@ -142,21 +142,19 @@ def keyboard_controller(screen):
                             'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES', 'MSP_ANALOG']
 
             if board.INAV:
-                command_list.append('MSPV2_INAV_ANALOG')
+                command_list.append('MSP2_INAV_ANALOG')
                 command_list.append('MSP_VOLTAGE_METER_CONFIG')
 
             for msg in command_list: 
-                try:
-                    code_value = MSPy.MSPCodes[msg]
-                    if board.send_RAW_msg(code_value, data=[]):
-                        dataHandler = board.receive_msg()
-                        board.process_recv_data(dataHandler)
-                except KeyError as err:
-                    pass
+                code_value = MSPy.MSPCodes[msg]
+                if board.send_RAW_msg(code_value, data=[]):
+                    dataHandler = board.receive_msg()
+                    board.process_recv_data(dataHandler)
+
             if board.INAV:
                 cellCount = board.BATTERY_STATE['cellCount']
             else:
-                cellCount = 0 # MSPV2_INAV_ANALOG is necessary
+                cellCount = 0 # MSP2_INAV_ANALOG is necessary
             min_voltage = board.BATTERY_CONFIG['vbatmincellvoltage']*cellCount
             warn_voltage = board.BATTERY_CONFIG['vbatwarningcellvoltage']*cellCount
             max_voltage = board.BATTERY_CONFIG['vbatmaxcellvoltage']*cellCount
