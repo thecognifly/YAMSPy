@@ -1,5 +1,6 @@
 import sys
 from setuptools import setup, find_packages
+from yamspy import __version__
 
 if sys.version_info < (3, 7):
     sys.exit('Sorry, Python < 3.7 is not supported.')
@@ -10,7 +11,7 @@ with open("README.md", "r") as fh:
 setup(
     name="yamspy",
     packages=[package for package in find_packages()],
-    version="0.3.3",
+    version=__version__,
     license="GPL",
     description="Yet Another Implementation of Multiwii Serial Protocol Python Interface for Betaflight, iNAV, etc.",
     long_description=long_description,
