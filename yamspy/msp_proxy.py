@@ -49,9 +49,13 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                 def receive():
                     logging.debug(f"[{PORT}] waiting for data to be received from PC...")
                     _,_,_ = select([conn],[],[])  # wait for data
-                    recvbuffer = conn.recv(buffersize) # read all buffer
-                    if not recvbuffer:
+                    try:
+                        recvbuffer = conn.recv(buffersize) # read all buffer
+                        if not recvbuffer:
+                            conn.close() # no data for SOCK_STREAM = dead
+                    except ConnectionResetError:
                         conn.close() # no data for SOCK_STREAM = dead
+                        recvbuffer = b''
                     logging.debug(f"[{PORT}] Socket ({addr}) returned recvbuffer {recvbuffer}")
                     return recvbuffer
 
@@ -67,19 +71,20 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                     sleep(time2sleep)
                     tic = monotonic()
                     # This is a slow operation... but it's needed to know
-                    # where a message starts / ends
-                    pc2fc, raw_bytes = msp_ctrl.receive_msg(receive, logging, output_raw_bytes=True)
+                    # where a message starts / ends, and it's useful for debugging
+                    pc2fc, raw_bytes = msp_ctrl.receive_msg(receive, logging, output_raw_bytes=True) # from PC
                     logging.debug(f"[{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
                     logging.debug(f"[{PORT}] {msp_codes.MSPCodes2Str[pc2fc['code']]} message_direction={'FC2PC' if pc2fc['message_direction'] else 'PC2FC'}, payload={len(pc2fc['dataView'])}, packet_error={pc2fc['packet_error']}")
                     if pc2fc['packet_error'] != 0:
-                        logging.debug(f"[{PORT}] packet_error!!!!")
+                        logging.error(f"[{PORT}] packet_error!!!!")
+                        raw_bytes = b''
                     if raw_bytes:
-                        pipe.send([PORT,raw_bytes])
-                        raw_bytes = pipe.recv() # blocking
+                        pipe.send([PORT,raw_bytes]) # to FC (proxy)
+                        raw_bytes = pipe.recv() # from FC (proxy)
                         if raw_bytes:
                             res = False
                             try:
-                                res = send(raw_bytes)
+                                res = send(raw_bytes) # to PC
                             finally:
                                 if res:
                                     logging.debug(f"[{PORT}] RAW message sent to PC: {raw_bytes}")
@@ -116,7 +121,7 @@ def main(ports, device, baudrate, timeout=1/1000):
         pipe_local, pipe_thread = Pipe()
         HOST = '127.0.0.1'
         PORT = p
-        server_thread = Process(target=TCPServer, args=(pipe_thread, HOST, PORT, timeout))
+        server_thread = Process(target=TCPServer, args=(pipe_thread, HOST, PORT, timeout, time2sleep))
         # Exit the server thread when the main thread terminates
         server_thread.daemon = True
         server_thread.start()
@@ -127,30 +132,32 @@ def main(ports, device, baudrate, timeout=1/1000):
     while True:
         pipes,_,_ = select(local_pipes,[],[])
         pipe_local = pipes[0]
-        PORT, raw_bytes = pipe_local.recv()
+        PORT, raw_bytes = pipe_local.recv() # from PC
         server_thread, _, pipe_thread, HOST = servers[PORT]
         if server_thread.is_alive():
-            # send this message to the FC
             res = 0
             try:
-                res = sconn.write(raw_bytes)
-            finally:
+                res = sconn.write(raw_bytes) # to FC (serial port)
                 if res>0:
                     logging.debug(f"[MAIN-{PORT}] RAW message sent to FC: {raw_bytes}")
                 else:
-                    raise RuntimeError(f"[MAIN-{PORT}] RAW message not sent")
+                    logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent")
+                    pipe_local.send(b'') # to PC (TCP)
+                    continue
+            except serial.SerialTimeoutException:
+                logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent")
+                pipe_local.send(b'') # to PC (TCP)
+                continue
 
             # Check for a response from the FC
             tic = monotonic()
-            while True:
-                fc2pc, raw_bytes = msp_ctrl.receive_msg(ser_read, logging, output_raw_bytes=True)
-                logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
-                logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
-                if fc2pc['packet_error'] != 0:
-                    logging.debug(f"[MAIN-{PORT}] packet_error!!!!")
-                if raw_bytes:
-                    break
-            pipe_local.send(raw_bytes)
+            fc2pc, raw_bytes = msp_ctrl.receive_msg(ser_read, logging, output_raw_bytes=True) # from FC (serial port)
+            logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
+            logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
+            if fc2pc['packet_error'] != 0:
+                logging.error(f"[MAIN-{PORT}] packet_error!!!!")
+                raw_bytes = b''
+            pipe_local.send(raw_bytes) # to PC (TCP)
         else:
             raise RuntimeError(f"Server for {HOST, PORT} died!")
 
