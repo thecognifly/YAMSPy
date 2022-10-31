@@ -48,6 +48,7 @@ import time
 import curses
 from collections import deque
 from itertools import cycle
+import argparse
 
 from yamspy import MSPy
 
@@ -69,7 +70,6 @@ NO_OF_CYCLES_AVERAGE_GUI_TIME = 10
 # https://pyserial.readthedocs.io/en/latest/shortintro.html
 #
 #
-SERIAL_PORT = "/dev/ttyACM0"
 
 def run_curses(external_function):
     result=1
@@ -328,4 +328,9 @@ def keyboard_controller(screen):
         screen.clrtoeol()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='simpleUI.py: Simple UI (toy one really) to test YAMSPy')
+    parser.add_argument('--serialport', type=str, default='/dev/ttyACM0',
+                                  help='serial port (e.g. /dev/ttyACM0')
+    args = parser.parse_args()
+    SERIAL_PORT = args.serialport
     run_curses(keyboard_controller)
