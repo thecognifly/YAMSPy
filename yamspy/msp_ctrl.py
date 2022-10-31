@@ -30,19 +30,12 @@ def receive_raw_msg(local_read, logging, size, timeout = 0.1):
     bytes
         data received
     """
-    timeout = time.time() + timeout
-    msg_header = ''
-    while True:
-        if time.time() >= timeout:
-            logging.warning("Timeout occured when receiving a message")
-            return msg_header
-        msg_header = local_read()
-        if msg_header:
-            if ord(msg_header) == 36: # $
-                break
-    msg = local_read(size - 1) # -1 to compensate for the $
-
-    return msg_header + msg
+    msg = local_read()
+    if len(msg)>=size:
+        if msg[0] == 36: # $
+            return msg[1:size+1] # to compensate for the $
+    logging.warning("Error occured when receiving a message")
+    return b''
 
 def receive_msg(local_read, logging, output_raw_bytes=False):
     """Receive an MSP message from the serial port
