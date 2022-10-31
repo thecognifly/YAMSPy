@@ -5,7 +5,7 @@ import struct
 from yamspy import MSPy, msp_ctrl
 
 serial_port = 54320
-FC_SEND_LOOP_TIME = 1/5
+FC_SEND_LOOP_TIME = 1/20
 
 
 msp2_baro_format = '<BIfh' # https://docs.python.org/3/library/struct.html#format-characters
@@ -26,14 +26,14 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
             board.process_recv_data(dataHandler)
     try:
         # https://www.mide.com/air-pressure-at-altitude-calculator
-        # Pressure: 101264.95 Pa
-        # Temp: 15oC
-        # Altitude: 5m
+        # Pressure: 100745.83 Pa
+        # Temp: 25oC
+        # Altitude: 50m
 
         mspSensorBaroDataMessage = baro_template.copy()
         mspSensorBaroDataMessage['instance'] = 1
-        mspSensorBaroDataMessage['pressurePa'] = 101264.95
-        mspSensorBaroDataMessage['temp'] = 15
+        mspSensorBaroDataMessage['pressurePa'] = 100745.83
+        mspSensorBaroDataMessage['temp'] = 25*100 # centi-degrees C
         while True:
             print(time.monotonic())
             baro_data = struct.pack(msp2_baro_format, *mspSensorBaroDataMessage.values())
