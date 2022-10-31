@@ -108,7 +108,7 @@ def main(ports, device, baudrate, timeout=1/1000):
         exit(1)
 
     def ser_read():
-        _,_,_ = select([sconn],[],[])  # wait for data
+        _,_,_ = select([sconn],[],[], timeout*100)  # wait for data
         data = b''
         data = sconn.read(sconn.inWaiting()) # blocking
         return data
