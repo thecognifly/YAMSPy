@@ -148,11 +148,11 @@ def main(ports, device, baudrate, timeout=1/1000):
                 if res>0:
                     logging.debug(f"[MAIN-{PORT}] RAW message sent to FC: {raw_bytes}")
                 else:
-                    logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent")
+                    logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent to FC!")
                     pipe_local.send(b'') # to PC (TCP)
                     continue
             except serial.SerialTimeoutException:
-                logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent")
+                logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent to FC (SerialTimeoutException)!")
                 pipe_local.send(b'') # to PC (TCP)
                 continue
 
