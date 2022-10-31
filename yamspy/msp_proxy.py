@@ -19,6 +19,8 @@ from time import sleep, monotonic
 from threading import Lock
 from multiprocessing import Process, Pipe
 from select import select
+from os import path, kill, getppid
+from signal import SIGINT
 
 import serial
 
@@ -71,7 +73,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                     logging.debug(f"[{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
                     logging.debug(f"[{PORT}] {msp_codes.MSPCodes2Str[pc2fc['code']]} message_direction={'FC2PC' if pc2fc['message_direction'] else 'PC2FC'}, payload={len(pc2fc['dataView'])}, packet_error={pc2fc['packet_error']}")
                     if pc2fc['packet_error'] != 0:
-                        logging.error(f"[{PORT}] packet_error!!!!")
+                        logging.error(f"[{PORT}] packet_error receiving from TCP!!!!")
                         raw_bytes = b''
                     if raw_bytes:
                         pipe.send([PORT,raw_bytes]) # to FC (proxy)
@@ -124,8 +126,18 @@ def main(ports, device, baudrate, timeout=1/1000):
         servers[PORT] = [server_thread, pipe_local, pipe_thread, HOST]
 
     local_pipes = [v[1]for v in servers.values()]
-    while True:
-        pipes,_,_ = select(local_pipes,[],[])
+
+    # to avoid getting stuck with select
+    def check_serial_port():
+        while path.exists(device):
+            sleep(1)
+        kill(getppid(), SIGINT) # will raise the KeyboardInterrupt
+    serial_test_thread = Process(target=check_serial_port)
+    serial_test_thread.daemon = True
+    serial_test_thread.start()
+    
+    while path.exists(device):
+        pipes,_,_ = select(local_pipes,[],[sconn])
         pipe_local = pipes[0]
         PORT, raw_bytes = pipe_local.recv() # from PC
         server_thread, _, pipe_thread, HOST = servers[PORT]
@@ -150,7 +162,7 @@ def main(ports, device, baudrate, timeout=1/1000):
             logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
             logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
             if fc2pc['packet_error'] != 0:
-                logging.error(f"[MAIN-{PORT}] packet_error!!!!")
+                logging.error(f"[MAIN-{PORT}] packet_error receiving from serial port!!!!")
                 raw_bytes = b''
             pipe_local.send(raw_bytes) # to PC (TCP)
         else:
