@@ -5,7 +5,7 @@ import struct
 from yamspy import MSPy, msp_ctrl
 
 serial_port = 54320
-FC_SEND_LOOP_TIME = 1/5
+FC_SEND_LOOP_TIME = 1/10
 
 msp2_gps_format = '<BHIBBHHHHiiiiiiHHHBBBBB' # https://docs.python.org/3/library/struct.html#format-characters
 gps_template = {
@@ -57,7 +57,7 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
         # gpsSol.llh.lat   = pkt->latitude;
         mspSensorGpsDataMessage['latitude'] = 45.50496682273918 * 10000000
         # gpsSol.llh.alt   = pkt->mslAltitude;
-        mspSensorGpsDataMessage['mslAltitude'] = 500 # [cm]
+        mspSensorGpsDataMessage['mslAltitude'] = 5000 # [cm]
         # gpsSol.velNED[X] = pkt->nedVelNorth;
         mspSensorGpsDataMessage['nedVelNorth'] = 0
         # gpsSol.velNED[Y] = pkt->nedVelEast;

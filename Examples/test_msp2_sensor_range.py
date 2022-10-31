@@ -4,13 +4,13 @@ import struct
 
 from yamspy import MSPy, msp_ctrl
 
-serial_port = 54320
+serial_port = 54330
 FC_SEND_LOOP_TIME = 1/20
 
 
 msp2_range_format = '<Bi' # https://docs.python.org/3/library/struct.html#format-characters
 range_template = {
-             'quality': 0,      # uint8_t - [0;255]
+             'quality': 0,      # uint8_t - [0;255] - INAV 5.1 ignores this value!
              'distanceMm': 0,   # int32_t - Negative value for out of range
 }
 
@@ -29,8 +29,8 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
         # Altitude: 50m
 
         mspSensorRangefinderDataMessage = range_template.copy()
-        mspSensorRangefinderDataMessage['quality'] = 0
-        mspSensorRangefinderDataMessage['distanceMm'] = 10*1000
+        mspSensorRangefinderDataMessage['quality'] = 200
+        mspSensorRangefinderDataMessage['distanceMm'] = 50*1000
         while True:
             print(time.monotonic())
             baro_data = struct.pack(msp2_range_format, *mspSensorRangefinderDataMessage.values())
