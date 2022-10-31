@@ -611,13 +611,15 @@ class MSPy:
             self.conn.writeTimeout = self.timeout
             self.write = self.conn.write
 
-            def ser_read():
-                data = self.conn.read(1)
-                data += self.conn.read(self.conn.inWaiting())
+            def ser_read(size = None):
+                _,_,_ = select([self.conn],[],[])  # wait for data
+                data = self.conn.read(self.conn.inWaiting()) # blocking
+                if size:
+                    return data[:size]
                 return data
+
             self.read = ser_read
             self.start = self.conn.open
-
         
         else :
             from .tcp_conn import TCPSocket
@@ -730,7 +732,8 @@ class MSPy:
             # 6 bytes + data_length
             # data_length: 9 x 2 = 18 bytes
             data_length = 18
-            msg = self.receive_raw_msg(size = (6+data_length))[5:]
+            msg = self.receive_raw_msg(size = (6+data_length))
+            msg = msg[5:]
             converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
 
             # /512 for mpu6050, /256 for mma
