@@ -612,9 +612,8 @@ class MSPy:
             self.write = self.conn.write
 
             def ser_read():
-                _,_,_ = select([self.conn],[],[])  # wait for data
-                data = b''
-                data = self.conn.read(self.conn.inWaiting()) # blocking
+                data = self.conn.read(1)
+                data += self.conn.read(self.conn.inWaiting())
                 return data
             self.read = ser_read
             self.start = self.conn.open
