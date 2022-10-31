@@ -26,11 +26,6 @@ from . import msp_ctrl
 from . import msp_codes
 
 
-logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
-                    level=getattr(logging, 'INFO'),
-                    stream=sys.stdout)
-
-
 def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # to avoid "Address already in use" when the port is actually free
@@ -174,14 +169,14 @@ if __name__ == '__main__':
     parser.add_argument('--baudrate', type=int,  default=115200,
                         help='Baudrate used by the serial connection...')
 
-    parser.add_argument('--nice', type=int,
-                        default=0,
-                        help='Nice level (from -20 to 19, but negative numbers need sudo)')
+    # parser.add_argument('--nice', type=int,
+    #                     default=0,
+    #                     help='Nice level (from -20 to 19, but negative numbers need sudo)')
 
-    parser.add_argument('--string_choices', type=str, nargs='*', 
-                        default=[], 
-                        choices=['opt1', 'opt2', 'opt3'], 
-                        help='help...')
+    # parser.add_argument('--string_choices', type=str, nargs='*', 
+    #                     default=[], 
+    #                     choices=['opt1', 'opt2', 'opt3'], 
+    #                     help='help...')
 
     parser.add_argument("--debug", 
                         action='store_true', 
@@ -190,6 +185,15 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if args.debug:
+        logmode = 'DEBUG'
+    else:
+        logmode = 'INFO'
+
+    logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
+                        level=getattr(logging, logmode),
+                        stream=sys.stdout)
+    
     try:
         main(args.ports, args.serial, args.baudrate, timeout=1/1000)
     except KeyboardInterrupt:
