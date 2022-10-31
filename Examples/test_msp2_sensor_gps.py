@@ -47,17 +47,17 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
     try:
         mspSensorGpsDataMessage = gps_template.copy()
         mspSensorGpsDataMessage['instance'] = 1
-        mspSensorGpsDataMessage['fixType'] = 3
+        mspSensorGpsDataMessage['fixType'] = 10
         mspSensorGpsDataMessage['satellitesInView'] = mspSensorGpsDataMessage['fixType']
         mspSensorGpsDataMessage['gpsWeek'] = 0xFFFF
 
         ############ SEND GPS DATA #############
         # gpsSol.llh.lon   = pkt->longitude;
-        mspSensorGpsDataMessage['longitude'] = 45.50496682273918 * 10000000
+        mspSensorGpsDataMessage['longitude'] = -73.61319383049725 * 10000000
         # gpsSol.llh.lat   = pkt->latitude;
-        mspSensorGpsDataMessage['latitude'] = -73.61319383049725 * 10000000
+        mspSensorGpsDataMessage['latitude'] = 45.50496682273918 * 10000000
         # gpsSol.llh.alt   = pkt->mslAltitude;
-        mspSensorGpsDataMessage['mslAltitude'] = 100 # [cm]
+        mspSensorGpsDataMessage['mslAltitude'] = 500 # [cm]
         # gpsSol.velNED[X] = pkt->nedVelNorth;
         mspSensorGpsDataMessage['nedVelNorth'] = 0
         # gpsSol.velNED[Y] = pkt->nedVelEast;
