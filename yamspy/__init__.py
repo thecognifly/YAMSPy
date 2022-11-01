@@ -129,9 +129,9 @@ class MSPy:
             'gyroscope':                  [0, 0, 0],
             'accelerometer':              [0, 0, 0],
             'magnetometer':               [0, 0, 0],
-            'altitude':                   0,
-            'altitude_vel':               0,
-            'sonar':                      0,
+            'altitude':                   0.0,
+            'altitude_vel':               0.0,
+            'sonar':                      0.0,
             'kinematics':                 [0.0, 0.0, 0.0],
             'debug':                      [0, 0, 0, 0, 0, 0, 0, 0], # 8 values for special situations like MSP2_INAV_DEBUG
         }
@@ -596,6 +596,8 @@ class MSPy:
         self.use_tcp = use_tcp
         self.timeout = timeout
         self.device = device
+        
+        self.read_buffer = b''
 
         if self.use_tcp is False:
             import serial # pyserial
@@ -611,16 +613,12 @@ class MSPy:
             self.conn.dsrdtr = False
             self.conn.writeTimeout = self.timeout
             self.write = self.conn.write
+            self.timeout_exception = serial.SerialTimeoutException
 
-            def ser_read(size = None):
-                _,_,_ = select([self.conn],[],[])  # wait for data
+            def ser_read():
+                _,_,_ = select([self.conn],[],[],self.timeout)  # wait for data
                 data = self.conn.read(self.conn.inWaiting()) # blocking
-                if size:
-                    if len(data) < size:
-                        data += self.conn.read(self.conn.inWaiting()) # blocking
-                    return data[:size]
                 return data
-
             self.read = ser_read
             self.start = self.conn.open
         
@@ -631,13 +629,14 @@ class MSPy:
             self.write = self.conn.send
             self.read = self.conn.receive
             self.start = self.conn.connect
+            self.timeout_exception = socket.timeout_exception
 
         self.ser_trials = trials
 
         self.port_read_lock = RLock()
 
         self.INAV = False
-        
+
     def __enter__(self):
         is_connection_open = not self.connect(trials=self.ser_trials)
 
@@ -703,7 +702,7 @@ class MSPy:
             self.INAV = True
 
         basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 
-                               'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX']
+                               'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX', 'MSP_ANALOG']
         if self.INAV:
             basic_info_cmd_list.append('MSP2_INAV_ANALOG')
             basic_info_cmd_list.append('MSP_VOLTAGE_METER_CONFIG')
@@ -718,14 +717,14 @@ class MSPy:
     def fast_read_altitude(self):
         # Request altitude
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_ALTITUDE']):
-            dataHandler = self.receive_msg()
-            self.process_recv_data(dataHandler)
-            # # $ + M + < + data_length + msg_code + data + msg_crc
-            # # 6 bytes + data_length
-            # data_length = 4
-            # msg = self.receive_raw_msg(size = (6+data_length))[5:]
-            # converted_msg = struct.unpack('<i', msg[:-1])[0]
-            # self.SENSOR_DATA['altitude'] = round((converted_msg / 100.0), 2) # correct scale factor
+            # dataHandler = self.receive_msg()
+            # self.process_recv_data(dataHandler)
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
+            data_length = 4
+            msg = self.receive_raw_msg(size = (6+data_length))[5:]
+            converted_msg = struct.unpack('<i', msg[:-1])[0]
+            self.SENSOR_DATA['altitude'] = round((converted_msg / 100.0), 2) # correct scale factor
 
     def fast_read_imu(self):
         """Request, read and process RAW IMU
@@ -733,33 +732,33 @@ class MSPy:
 
         # Request IMU values
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU']):
-            dataHandler = self.receive_msg()
-            self.process_recv_data(dataHandler)
-            # # $ + M + < + data_length + msg_code + data + msg_crc
-            # # 6 bytes + data_length
-            # # data_length: 9 x 2 = 18 bytes
-            # data_length = 18
-            # msg = self.receive_raw_msg(size = (6+data_length))
-            # msg = msg[5:]
-            # converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
+            # dataHandler = self.receive_msg()
+            # self.process_recv_data(dataHandler)
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
+            # data_length: 9 x 2 = 18 bytes
+            data_length = 18
+            msg = self.receive_raw_msg(size = (6+data_length))
+            msg = msg[5:]
+            converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
 
-            # # /512 for mpu6050, /256 for mma
-            # # currently we are unable to differentiate between the sensor types, so we are going with 512
-            # # And what about SENSOR_CONFIG???
-            # self.SENSOR_DATA['accelerometer'][0] = converted_msg[0]
-            # self.SENSOR_DATA['accelerometer'][1] = converted_msg[1]
-            # self.SENSOR_DATA['accelerometer'][2] = converted_msg[2]
+            # /512 for mpu6050, /256 for mma
+            # currently we are unable to differentiate between the sensor types, so we are going with 512
+            # And what about SENSOR_CONFIG???
+            self.SENSOR_DATA['accelerometer'][0] = converted_msg[0]
+            self.SENSOR_DATA['accelerometer'][1] = converted_msg[1]
+            self.SENSOR_DATA['accelerometer'][2] = converted_msg[2]
 
-            # # properly scaled (INAV and BF use the same * (4 / 16.4))
-            # # but this is supposed to be RAW, so raw it is!
-            # self.SENSOR_DATA['gyroscope'][0] = converted_msg[3]
-            # self.SENSOR_DATA['gyroscope'][1] = converted_msg[4]
-            # self.SENSOR_DATA['gyroscope'][2] = converted_msg[5]
+            # properly scaled (INAV and BF use the same * (4 / 16.4))
+            # but this is supposed to be RAW, so raw it is!
+            self.SENSOR_DATA['gyroscope'][0] = converted_msg[3]
+            self.SENSOR_DATA['gyroscope'][1] = converted_msg[4]
+            self.SENSOR_DATA['gyroscope'][2] = converted_msg[5]
 
-            # # no clue about scaling factor (/1090), so raw
-            # self.SENSOR_DATA['magnetometer'][0] = converted_msg[6]
-            # self.SENSOR_DATA['magnetometer'][1] = converted_msg[7]
-            # self.SENSOR_DATA['magnetometer'][2] = converted_msg[8]
+            # no clue about scaling factor (/1090), so raw
+            self.SENSOR_DATA['magnetometer'][0] = converted_msg[6]
+            self.SENSOR_DATA['magnetometer'][1] = converted_msg[7]
+            self.SENSOR_DATA['magnetometer'][2] = converted_msg[8]
 
 
     def fast_read_attitude(self):
@@ -768,18 +767,18 @@ class MSPy:
 
         # Request ATTITUDE values
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_ATTITUDE']):
-            dataHandler = self.receive_msg()
-            self.process_recv_data(dataHandler)
-            # # $ + M + < + data_length + msg_code + data + msg_crc
-            # # 6 bytes + data_length
-            # # data_length: 3 x 2 = 6 bytes
-            # data_length = 6
-            # msg = self.receive_raw_msg(size = (6+data_length))[5:]
-            # converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
+            # dataHandler = self.receive_msg()
+            # self.process_recv_data(dataHandler)
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
+            # data_length: 3 x 2 = 6 bytes
+            data_length = 6
+            msg = self.receive_raw_msg(size = (6+data_length))[5:]
+            converted_msg = struct.unpack('<%dh' % (data_length/2) , msg[:-1])
 
-            # self.SENSOR_DATA['kinematics'][0] = converted_msg[0] / 10.0 # x
-            # self.SENSOR_DATA['kinematics'][1] = converted_msg[1] / 10.0 # y
-            # self.SENSOR_DATA['kinematics'][2] = converted_msg[2] # z
+            self.SENSOR_DATA['kinematics'][0] = converted_msg[0] / 10.0 # x
+            self.SENSOR_DATA['kinematics'][1] = converted_msg[1] / 10.0 # y
+            self.SENSOR_DATA['kinematics'][2] = converted_msg[2] # z
     
     
     def fast_read_analog(self):
@@ -788,29 +787,29 @@ class MSPy:
 
         # Request ANALOG values
         if self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG']):
-            dataHandler = self.receive_msg()
-            self.process_recv_data(dataHandler)
-            # # $ + M + < + data_length + msg_code + data + msg_crc
-            # # 6 bytes + data_length
-            # if not self.INAV:
-            #     # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
-            #     data_length = 9
-            #     msg = self.receive_raw_msg(size = (6+data_length))[5:]
-            #     converted_msg = struct.unpack('<B2HhH', msg[:-1])
+            # dataHandler = self.receive_msg()
+            # self.process_recv_data(dataHandler)
+            # $ + M + < + data_length + msg_code + data + msg_crc
+            # 6 bytes + data_length
+            if not self.INAV:
+                # data_length: 1 + 2 + 2 + 2 + 2 = 9 bytes
+                data_length = 9
+                msg = self.receive_raw_msg(size = (6+data_length))[5:]
+                converted_msg = struct.unpack('<B2HhH', msg[:-1])
 
-            # else:
-            #     # data_length: 1 + 2 + 2 + 2 = 7 bytes
-            #     data_length = 7
-            #     msg = self.receive_raw_msg(size = (6+data_length))[5:]
-            #     converted_msg = struct.unpack('<B2Hh', msg[:-1])
+            else:
+                # data_length: 1 + 2 + 2 + 2 = 7 bytes
+                data_length = 7
+                msg = self.receive_raw_msg(size = (6+data_length))[5:]
+                converted_msg = struct.unpack('<B2Hh', msg[:-1])
 
-            # self.ANALOG['voltage'] = converted_msg[0] / 10 # iNAV uses a MSP2 message to get a precise value.
-            # self.ANALOG['mAhdrawn'] = converted_msg[1]
-            # self.ANALOG['rssi'] = converted_msg[2] # 0-1023
-            # self.ANALOG['amperage'] = converted_msg[3] / 100 # A
-            # self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
-            # if not self.INAV:
-            #     self.ANALOG['voltage'] = converted_msg[4] / 100 # BF has this 2 bytes value here
+            self.ANALOG['voltage'] = converted_msg[0] / 10 # iNAV uses a MSP2 message to get a precise value.
+            self.ANALOG['mAhdrawn'] = converted_msg[1]
+            self.ANALOG['rssi'] = converted_msg[2] # 0-1023
+            self.ANALOG['amperage'] = converted_msg[3] / 100 # A
+            self.ANALOG['last_received_timestamp'] = int(time.time()) # why not monotonic? where is time synchronized?
+            if not self.INAV:
+                self.ANALOG['voltage'] = converted_msg[4] / 100 # BF has this 2 bytes value here
 
 
     def fast_msp_rc_cmd(self, cmds):
@@ -835,7 +834,7 @@ class MSPy:
         
     def receive_raw_msg(self, size, timeout = 10):
         with self.port_read_lock:
-            return msp_ctrl.receive_raw_msg(self.read, logging, size, timeout)
+            return msp_ctrl.receive_raw_msg(self.read, logging, self.timeout_exception, size, timeout)
 
     def receive_msg(self):
         with self.port_read_lock:
@@ -1013,14 +1012,10 @@ class MSPy:
     def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
         mspv = 1 if code <= 255 else 2
         bufView = msp_ctrl.prepare_RAW_msg(mspv, code, data)
-        res = 0
-        try:
-            res = self.write(bufView)
-        finally:
-            if res>0:
-                logging.debug("RAW message sent: {}".format(bufView))
-            return res
-    
+        res = self.write(bufView)
+        logging.debug("RAW message sent: {}".format(bufView))
+        return res
+
 
     def process_recv_data(self, dataHandler):
         """Process the dataHandler from receive_msg consuming (pop!) dataHandler['dataView'] as it goes.

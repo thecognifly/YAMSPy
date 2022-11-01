@@ -19,6 +19,7 @@ class TCPSocket:
         else:
             self.sock = sock
         self.closed = False
+        self.timeout_exception = socket.timeout
 
     def connect(self, host='127.0.0.1', port=54320, timeout=1/500):
         self.sock.connect((host, port))

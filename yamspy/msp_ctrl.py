@@ -22,22 +22,53 @@ dataHandler_init = {
     'last_received_timestamp':   None
 }
 
-def receive_raw_msg(local_read, logging, size, timeout = 0.1):
-    """Receive multiple bytes at once when it's not a jumbo frame.
 
+read_buffer = b''
+def _read(local_read):
+    def read(size=None, buffer=None):
+        global read_buffer
+        if buffer:
+            read_buffer = buffer
+            return
+            
+        output = b''
+        if size:
+            while True:
+                output += read_buffer[:size]
+                read_buffer = read_buffer[size:]
+                size -= len(output)
+                if size > 0:
+                    read_buffer += local_read() # read (try) everything in the seria/socket buffer
+                else:
+                    break
+        else:
+            if len(read_buffer)==0:
+                read_buffer += local_read() # read (try) everything in the seria/socket buffer
+            output += read_buffer
+            read_buffer = b''
+        return output
+    return read
+
+def receive_raw_msg(local_read, logging, timeout_exception, size, timeout = 10):
+    """Receive multiple bytes at once when it's not a jumbo frame.
     Returns
     -------
     bytes
         data received
     """
-    msg = local_read(size)
-    if len(msg)>=size:
-        if msg[0] == 36: # $
-            return msg[:size]
-    else:
-        raise
-    logging.warning("Error occured when receiving a message")
-    return b''
+    local_read = _read(local_read)
+    msg_header = b''
+    timeout = time.time() + timeout
+    while True:
+        if time.time() >= timeout:
+            logging.warning("Timeout occured when receiving a message")
+            raise timeout_exception("receive_raw_msg timeout")
+        msg_header = local_read(size=1)
+        if msg_header:
+            if ord(msg_header) == 36: # $
+                break
+    msg = local_read(size=(size - 1)) # -1 to compensate for the $
+    return msg_header + msg
 
 def receive_msg(local_read, logging, output_raw_bytes=False):
     """Receive an MSP message from the serial port
@@ -48,7 +79,7 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
     dict
         dataHandler with the received data pre-parsed
     """
-
+    local_read = _read(local_read)
     dataHandler = dataHandler_init.copy()
     if output_raw_bytes:
         raw_bytes = b''
@@ -57,13 +88,14 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
     while True:
         try:
             if di == 0:
-                received_bytes = memoryview(local_read())
+                received_bytes = memoryview(local_read()) # it will read everything from the buffer
                 if received_bytes:
                     dataHandler['last_received_timestamp'] = time.time()
                     data = received_bytes[di]
                     if output_raw_bytes:
                         raw_bytes += received_bytes[di:di+1]
                 else:
+                    dataHandler['packet_error'] = 1
                     break
             else:
                 data = received_bytes[di]
@@ -91,6 +123,7 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                 dataHandler['state'] = 2
             else: # something went wrong, no M received...
                 logging.debug('Something went wrong, no M received.')
+                dataHandler['packet_error'] = 1
                 break # sends it to the error state
 
         elif dataHandler['state'] == 2: # direction (should be >)
@@ -99,6 +132,7 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                 # FC reports unsupported message error
                 logging.debug('FC reports unsupported message error.')
                 dataHandler['unsupported'] = 1
+                dataHandler['packet_error'] = 1
                 break # sends it to the error state
             else:
                 if (data == 62): # > FC to PC
@@ -209,17 +243,15 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                         # checksum is correct, message received, store dataview
                         logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
                         dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                        if output_raw_bytes:
-                            return dataHandler, raw_bytes
-                        else:
-                            return dataHandler 
+                        break
                     else:
                         # wrong checksum
                         logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
                                                                                                     data,
                                                                                                     dataHandler['message_checksum']))
                         dataHandler['crcError'] = True
-                        break # sends it to the error state
+                        dataHandler['packet_error'] = 1 # sends it to the error state
+                        break 
                 elif dataHandler['msp_version'] == 2:
                     dataHandler['message_checksum'] = 0
                     dataHandler['message_checksum'] = _crc8_dvb_s2(dataHandler['message_checksum'], 0) # flag
@@ -233,21 +265,22 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                         # checksum is correct, message received, store dataview
                         logging.debug("Message received (length {1}) - Code {0}".format(dataHandler['code'], dataHandler['message_length_received']))
                         dataHandler['dataView'] = dataHandler['message_buffer'] # keep same names from betaflight-configurator code
-                        if output_raw_bytes:
-                            return dataHandler, raw_bytes
-                        else:
-                            return dataHandler 
+                        break
                     else:
                         # wrong checksum
                         logging.debug('Code: {0} - crc failed (received {1}, calculated {2})'.format(dataHandler['code'], 
                                                                                                     data,
                                                                                                     dataHandler['message_checksum']))
                         dataHandler['crcError'] = True
-                        break # sends it to the error state
+                        dataHandler['packet_error'] = 1 # sends it to the error state
+                        break
 
-    # it means an error occurred
-    logging.debug('Error detected on state: {}'.format(dataHandler['state']))
-    dataHandler['packet_error'] = 1
+    if dataHandler['packet_error'] == 1:
+        # it means an error occurred
+        logging.debug('Error detected on state: {}'.format(dataHandler['state']))
+    
+    if len(received_bytes[di:]):
+        local_read(buffer=bytes(received_bytes[di:])) # regurgitates unread stuff :)
 
     if output_raw_bytes:
         return dataHandler, raw_bytes
