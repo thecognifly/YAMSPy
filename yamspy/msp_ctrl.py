@@ -30,10 +30,12 @@ def receive_raw_msg(local_read, logging, size, timeout = 0.1):
     bytes
         data received
     """
-    msg = local_read()
+    msg = local_read(size)
     if len(msg)>=size:
         if msg[0] == 36: # $
             return msg[:size]
+    else:
+        raise
     logging.warning("Error occured when receiving a message")
     return b''
 
