@@ -63,6 +63,8 @@ from serial import SerialException
 from . import msp_ctrl
 from . import msp_codes
 
+MIN_TIME_BETWEEN_WRITES = 1/100 # it will add a sleep if trying to write too fast
+
 class MSPy:
     MSPCodes = msp_codes.MSPCodes
     MSPCodes2Str = msp_codes.MSPCodes2Str
@@ -637,6 +639,8 @@ class MSPy:
 
         self.INAV = False
 
+        self.last_write = time.time()
+
     def __enter__(self):
         is_connection_open = not self.connect(trials=self.ser_trials)
 
@@ -1009,9 +1013,13 @@ class MSPy:
         return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
 
 
-    def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
+    def send_RAW_msg(self, code, data=[], blocking=None, timeout=None):
         mspv = 1 if code <= 255 else 2
         bufView = msp_ctrl.prepare_RAW_msg(mspv, code, data)
+        current_write = time.time()
+        if (current_write-self.last_write)<1/100:
+            time.sleep(1/100)
+        self.last_write = current_write
         res = self.write(bufView)
         logging.debug("RAW message sent: {}".format(bufView))
         return res
