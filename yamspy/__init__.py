@@ -1017,8 +1017,9 @@ class MSPy:
         mspv = 1 if code <= 255 else 2
         bufView = msp_ctrl.prepare_RAW_msg(mspv, code, data)
         current_write = time.time()
-        if (current_write-self.last_write)<1/100:
-            time.sleep(1/100)
+        time_diff = current_write - self.last_write
+        if (time_diff)<MIN_TIME_BETWEEN_WRITES:
+            time.sleep(max(time_diff-MIN_TIME_BETWEEN_WRITES,0))
         self.last_write = current_write
         res = self.write(bufView)
         logging.debug("RAW message sent: {}".format(bufView))
