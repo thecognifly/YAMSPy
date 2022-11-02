@@ -4,6 +4,7 @@ import struct
 
 from yamspy import MSPy, msp_ctrl
 
+# $ python -m yamspy.msp_proxy --ports 54310 54320 54330 54340
 serial_port = 54320
 FC_SEND_LOOP_TIME = 1/10
 
@@ -85,7 +86,7 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
         # mspSensorGpsDataMessage['min'] = 4
         # # gpsSol.time.seconds = pkt->sec;
         # mspSensorGpsDataMessage['sec'] = 5
-
+        
         while True:
             now = datetime.datetime.now()
             print(now)
@@ -104,6 +105,8 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
                 print("MSP_RAW_GPS ACK data received!")
                 board.process_recv_data(dataHandler)
                 print("MSP_RAW_GPS data processed!")
+            else:
+                print("MSP_RAW_GPS not sent!")
 
             # Received GPS data
             print(board.GPS_DATA)
@@ -111,6 +114,8 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
             # Send GPS data
             if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_GPS'], data=gps_data):
                 print(f"MSP2_SENSOR_GPS data {gps_data} sent!")
+            else:
+                print("MSP2_SENSOR_GPS not sent!")
 
             time.sleep(FC_SEND_LOOP_TIME)
 
