@@ -613,11 +613,12 @@ class MSPy:
             self.conn.dsrdtr = False
             self.conn.writeTimeout = self.timeout
             self.write = self.conn.write
+            self.flush = self.conn.flush
             self.timeout_exception = serial.SerialTimeoutException
 
             def ser_read():
-                _,_,_ = select([self.conn],[],[],self.timeout)  # wait for data
-                data = self.conn.read(self.conn.inWaiting()) # blocking
+                _,_,_ = select([self.conn],[],[])  # wait for data
+                data = self.conn.read(self.conn.in_waiting) # blocking
                 return data
             self.read = ser_read
             self.start = self.conn.open
@@ -629,6 +630,7 @@ class MSPy:
             self.write = self.conn.send
             self.read = self.conn.receive
             self.start = self.conn.connect
+            self.flush = lambda: None
             self.timeout_exception = socket.timeout_exception
 
         self.ser_trials = trials
@@ -969,7 +971,12 @@ class MSPy:
 
     def reboot(self):
         logging.info("Reboot requested")
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_REBOOT'], data=[])
+        rebooting = True
+        while rebooting:
+            if self.send_RAW_msg(MSPy.MSPCodes['MSP_REBOOT'], data=[]):
+                dataHandler = self.receive_msg()
+                if dataHandler['code'] == MSPy.MSPCodes['MSP_REBOOT'] and dataHandler['packet_error'] == 0:
+                    rebooting = False
 
 
     def set_ARMING_DISABLE(self, armingDisabled=0, runawayTakeoffPreventionDisabled=0):
@@ -1029,8 +1036,9 @@ class MSPy:
             current_write = time.time()
             if (current_write-self.last_write) < self.min_time_between_writes:
                 time.sleep(max(current_write-self.last_write-self.min_time_between_writes,0))
-            self.last_write = current_write
             res = self.write(bufView)
+            self.flush()
+            self.last_write = current_write
             logging.debug("RAW message sent: {}".format(bufView))
             return res
 
