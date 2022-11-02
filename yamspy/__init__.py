@@ -636,6 +636,7 @@ class MSPy:
         self.ser_trials = trials
 
         self.port_read_lock = RLock()
+        self.port_write_lock = Lock()
 
         self.INAV = False
 
@@ -698,9 +699,11 @@ class MSPy:
         """Basic info about the flight controller to distinguish between the many flavours.
         """
         for msg in ['MSP_API_VERSION', 'MSP_FC_VARIANT']:
-            if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-                dataHandler = self.receive_msg()
-                self.process_recv_data(dataHandler)
+            sent = 0
+            while sent<=0:
+                sent = self.send_RAW_msg(MSPy.MSPCodes[msg], data=[])
+            dataHandler = self.receive_msg()
+            self.process_recv_data(dataHandler)
 
         if 'INAV' in self.CONFIG['flightControllerIdentifier']:
             self.INAV = True
@@ -712,9 +715,11 @@ class MSPy:
             basic_info_cmd_list.append('MSP_VOLTAGE_METER_CONFIG')
 
         for msg in basic_info_cmd_list:
-            if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-                dataHandler = self.receive_msg()
-                self.process_recv_data(dataHandler)
+            sent = 0
+            while sent<=0:
+                sent = self.send_RAW_msg(MSPy.MSPCodes[msg], data=[])
+            dataHandler = self.receive_msg()
+            self.process_recv_data(dataHandler)
     
         print(self.CONFIG)
 
@@ -837,10 +842,16 @@ class MSPy:
 
         
     def receive_raw_msg(self, size, timeout = 10):
+        current_write = time.time()
+        if (current_write-self.last_write) < MIN_TIME_BETWEEN_WRITES:
+            time.sleep(max(current_write-self.last_write-MIN_TIME_BETWEEN_WRITES,0))
         with self.port_read_lock:
             return msp_ctrl.receive_raw_msg(self.read, logging, self.timeout_exception, size, timeout)
 
     def receive_msg(self):
+        current_write = time.time()
+        if (current_write-self.last_write) < MIN_TIME_BETWEEN_WRITES:
+            time.sleep(max(current_write-self.last_write-MIN_TIME_BETWEEN_WRITES,0))
         with self.port_read_lock:
             return msp_ctrl.receive_msg(self.read, logging)
 
@@ -1016,12 +1027,14 @@ class MSPy:
     def send_RAW_msg(self, code, data=[], blocking=None, timeout=None):
         mspv = 1 if code <= 255 else 2
         bufView = msp_ctrl.prepare_RAW_msg(mspv, code, data)
-        current_write = time.time()
-        time.sleep(max(current_write-self.last_write-MIN_TIME_BETWEEN_WRITES,0))
-        self.last_write = current_write
-        res = self.write(bufView)
-        logging.debug("RAW message sent: {}".format(bufView))
-        return res
+        with self.port_write_lock:
+            current_write = time.time()
+            if (current_write-self.last_write) < MIN_TIME_BETWEEN_WRITES:
+                time.sleep(max(current_write-self.last_write-MIN_TIME_BETWEEN_WRITES,0))
+            self.last_write = current_write
+            res = self.write(bufView)
+            logging.debug("RAW message sent: {}".format(bufView))
+            return res
 
 
     def process_recv_data(self, dataHandler):
