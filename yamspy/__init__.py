@@ -592,7 +592,7 @@ class MSPy:
             logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
                                 level=getattr(logging, loglevel.upper()),
                                 stream=sys.stdout)
-        self.min_time_between_writes = self.min_time_between_writes # it will add a sleep if trying to write / read too fast
+        self.min_time_between_writes = min_time_between_writes # it will add a sleep if trying to write / read too fast
         self.use_tcp = use_tcp
         self.timeout = timeout
         self.device = device
