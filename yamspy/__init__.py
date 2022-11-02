@@ -1187,8 +1187,8 @@ class MSPy:
         self.SENSOR_DATA['kinematics'][2] = self.readbytes(data, size=16, unsigned=False) # z
 
     def process_MSP_ALTITUDE(self, data):
-        self.SENSOR_DATA['altitude'] = round((self.readbytes(data, size=32, unsigned=True) / 100.0), 2) # correct scale factor
-        self.SENSOR_DATA['altitude_vel'] = round(self.readbytes(data, size=16, unsigned=True) / 100.0, 2)
+        self.SENSOR_DATA['altitude'] = round((self.readbytes(data, size=32, unsigned=False) / 100.0), 2) # correct scale factor
+        self.SENSOR_DATA['altitude_vel'] = round(self.readbytes(data, size=16, unsigned=False) / 100.0, 2)
         # Baro altitude => self.readbytes(data, size=32, unsigned=True)
 
 
