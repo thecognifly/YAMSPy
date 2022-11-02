@@ -32,6 +32,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # to avoid "Address already in use" when the port is actually free
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_for_real_time/7/html/tuning_guide/tcp_nodelay_and_small_buffer_writes
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         buffersize = s.getsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF)
         s.settimeout(False)

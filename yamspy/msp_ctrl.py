@@ -38,12 +38,12 @@ def _read(local_read):
                 read_buffer = read_buffer[size:]
                 size -= len(output)
                 if size > 0:
-                    read_buffer += local_read() # read (try) everything in the seria/socket buffer
+                    read_buffer += local_read() # read (try) everything in the serial/socket buffer
                 else:
                     break
         else:
             if len(read_buffer)==0:
-                read_buffer += local_read() # read (try) everything in the seria/socket buffer
+                read_buffer += local_read() # read (try) everything in the serial/socket buffer
             output += read_buffer
             read_buffer = b''
         return output
