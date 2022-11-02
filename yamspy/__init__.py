@@ -63,8 +63,6 @@ from serial import SerialException
 from . import msp_ctrl
 from . import msp_codes
 
-MIN_TIME_BETWEEN_WRITES = 1/100 # it will add a sleep if trying to write too fast
-
 class MSPy:
     MSPCodes = msp_codes.MSPCodes
     MSPCodes2Str = msp_codes.MSPCodes2Str
@@ -73,7 +71,7 @@ class MSPy:
 
     def __init__(self, device, baudrate=115200, trials=1, 
                  logfilename='MSPy.log', logfilemode='a', loglevel='INFO', timeout=1/100,
-                 use_tcp=False):
+                 use_tcp=False, min_time_between_writes = 1/100):
         """
         Parameters
         ----------
@@ -594,7 +592,7 @@ class MSPy:
             logging.basicConfig(format="[%(levelname)s] [%(asctime)s]: %(message)s",
                                 level=getattr(logging, loglevel.upper()),
                                 stream=sys.stdout)
-
+        self.min_time_between_writes = self.min_time_between_writes # it will add a sleep if trying to write / read too fast
         self.use_tcp = use_tcp
         self.timeout = timeout
         self.device = device
@@ -843,15 +841,15 @@ class MSPy:
         
     def receive_raw_msg(self, size, timeout = 10):
         current_write = time.time()
-        if (current_write-self.last_write) < MIN_TIME_BETWEEN_WRITES:
-            time.sleep(max(current_write-self.last_write-MIN_TIME_BETWEEN_WRITES,0))
+        if (current_write-self.last_write) < self.min_time_between_writes:
+            time.sleep(max(current_write-self.last_write-self.min_time_between_writes,0))
         with self.port_read_lock:
             return msp_ctrl.receive_raw_msg(self.read, logging, self.timeout_exception, size, timeout)
 
     def receive_msg(self):
         current_write = time.time()
-        if (current_write-self.last_write) < MIN_TIME_BETWEEN_WRITES:
-            time.sleep(max(current_write-self.last_write-MIN_TIME_BETWEEN_WRITES,0))
+        if (current_write-self.last_write) < self.min_time_between_writes:
+            time.sleep(max(current_write-self.last_write-self.min_time_between_writes,0))
         with self.port_read_lock:
             return msp_ctrl.receive_msg(self.read, logging)
 
@@ -1029,8 +1027,8 @@ class MSPy:
         bufView = msp_ctrl.prepare_RAW_msg(mspv, code, data)
         with self.port_write_lock:
             current_write = time.time()
-            if (current_write-self.last_write) < MIN_TIME_BETWEEN_WRITES:
-                time.sleep(max(current_write-self.last_write-MIN_TIME_BETWEEN_WRITES,0))
+            if (current_write-self.last_write) < self.min_time_between_writes:
+                time.sleep(max(current_write-self.last_write-self.min_time_between_writes,0))
             self.last_write = current_write
             res = self.write(bufView)
             logging.debug("RAW message sent: {}".format(bufView))
