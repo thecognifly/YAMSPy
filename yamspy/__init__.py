@@ -844,14 +844,14 @@ class MSPy:
     def receive_raw_msg(self, size, timeout = 10):
         current_write = time.time()
         if (current_write-self.last_write) < self.min_time_between_writes:
-            time.sleep(max(current_write-self.last_write-self.min_time_between_writes,0))
+            time.sleep(max(self.min_time_between_writes-(current_write-self.last_write),0))
         with self.port_read_lock:
             return msp_ctrl.receive_raw_msg(self.read, logging, self.timeout_exception, size, timeout)
 
     def receive_msg(self):
         current_write = time.time()
         if (current_write-self.last_write) < self.min_time_between_writes:
-            time.sleep(max(current_write-self.last_write-self.min_time_between_writes,0))
+            time.sleep(max(self.min_time_between_writes-(current_write-self.last_write),0))
         with self.port_read_lock:
             return msp_ctrl.receive_msg(self.read, logging)
 
@@ -1035,7 +1035,7 @@ class MSPy:
         with self.port_write_lock:
             current_write = time.time()
             if (current_write-self.last_write) < self.min_time_between_writes:
-                time.sleep(max(current_write-self.last_write-self.min_time_between_writes,0))
+                time.sleep(max(self.min_time_between_writes-(current_write-self.last_write),0))
             res = self.write(bufView)
             self.flush()
             self.last_write = current_write
