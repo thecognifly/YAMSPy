@@ -1,18 +1,19 @@
 import time
 import datetime
 import struct
+import os
 
 from yamspy import MSPy
 
 # $ python -m yamspy.msp_proxy --ports 54310 54320 54330 54340 54350
 
 serial_port = '/dev/ttyACM0'
-# serial_port = 54350
+# serial_port = 54340
 
 FC_SEND_LOOP_TIME = 1/10
 
 with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False) as board:
-# with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True) as board:
+# with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
     command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
                     'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
                     'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
@@ -22,6 +23,7 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False
             board.process_recv_data(dataHandler)
     try:       
         while True:
+            os.system('clear')
             now = datetime.datetime.now()
             print(now)
 
@@ -37,16 +39,19 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False
 
             print(board.SENSOR_DATA['debug'])
 
-            for i,v in enumerate(['x', 'y', 'z']):
-                print(f"{v}={struct.unpack('>f',board.SENSOR_DATA['debug'][i].to_bytes(4,'big'))[0]}m")
-        
-            for i,v in enumerate(['vx', 'vy', 'vz']):
-                print(f"{v}={struct.unpack('>f',board.SENSOR_DATA['debug'][i+3].to_bytes(4,'big'))[0]}m/s")
+            try:
+                for i,v in enumerate(['x', 'y', 'z']):
+                    print(f"{v}={board.SENSOR_DATA['debug'][i]/1000.0}")
             
-            print(f"yaw={board.SENSOR_DATA['debug'][6]/10}degrees")
+                for i,v in enumerate(['vx', 'vy', 'vz']):
+                    print(f"{v}={board.SENSOR_DATA['debug'][i+3]/1000.0}")
+                
+                print(f"yaw={board.SENSOR_DATA['debug'][6]/10}degrees")
 
-            print(f"navEPV={board.SENSOR_DATA['debug'][7] & 0xFFFF}")
-            print(f"navEPH={(board.SENSOR_DATA['debug'][7] & 0xFFFF0000)>>16}")
+                print(f"navEPV={board.SENSOR_DATA['debug'][7] & 0xFFFF}")
+                print(f"navEPH={(board.SENSOR_DATA['debug'][7] & 0xFFFF0000)>>16}")
+            except TypeError as err:
+                pass
 
 
             time.sleep(FC_SEND_LOOP_TIME)
