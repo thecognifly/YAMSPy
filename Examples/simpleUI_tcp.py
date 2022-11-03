@@ -125,7 +125,7 @@ def keyboard_controller(screen):
     try:
         screen.addstr(15, 0, "Connecting to the FC...")
 
-        with MSPy(device=SERIAL_PORT, baudrate=115200, use_tcp=True) as board:
+        with MSPy(device=SERIAL_PORT, baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
             if board == 1: # an error occurred...
                 return 1
 
@@ -312,8 +312,7 @@ def keyboard_controller(screen):
                         screen.addstr(10, 0, "RC Channels Values: {}".format(board.RC['channels']))
                         screen.clrtoeol()
 
-                    screen.addstr(11, 0, "GUI cycleTime: {0:2.2f}ms (average {1:2.2f}Hz)".format((last_cycleTime)*1000,
-                                                                                                1/(sum(average_cycle)/len(average_cycle))))
+                    screen.addstr(11, 0, f"GUI cycleTime: {last_cycleTime*1000:2.2f}ms (average {1/(sum(average_cycle)/len(average_cycle)):2.2f}Hz)")
                     screen.clrtoeol()
 
                     screen.addstr(3, 0, cursor_msg)

@@ -46,12 +46,15 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                 print(f"Connected by {(HOST, PORT)}")
                 def receive():
                     logging.debug(f"[{PORT}] waiting for data to be received from PC...")
-                    _,_,_ = select([conn],[],[])  # wait for data
+                    _,_,_ = select([conn],[],[conn],1)  # wait for data, timeout is for closed connections
                     try:
                         recvbuffer = conn.recv(buffersize) # read all buffer
                         if not recvbuffer:
                             conn.close() # no data for SOCK_STREAM = dead
                     except ConnectionResetError:
+                        conn.close() # no data for SOCK_STREAM = dead
+                        recvbuffer = b''
+                    except socket.timeout:
                         conn.close() # no data for SOCK_STREAM = dead
                         recvbuffer = b''
                     logging.debug(f"[{PORT}] Socket ({addr}) returned recvbuffer {recvbuffer}")
@@ -71,26 +74,26 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                     # This is a slow operation... but it's needed to know
                     # where a message starts / ends, and it's useful for debugging
                     pc2fc, raw_bytes = msp_ctrl.receive_msg(receive, logging, output_raw_bytes=True) # from PC
+                    if not raw_bytes:
+                        break
                     logging.debug(f"[{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
                     logging.debug(f"[{PORT}] {msp_codes.MSPCodes2Str[pc2fc['code']]} message_direction={'FC2PC' if pc2fc['message_direction'] else 'PC2FC'}, payload={len(pc2fc['dataView'])}, packet_error={pc2fc['packet_error']}")
                     if pc2fc['packet_error'] != 0:
                         logging.error(f"[{PORT}] packet_error receiving from TCP!!!!")
-                        raw_bytes = b''
-                    if raw_bytes:
-                        if 'MSP2_SENSOR' in msp_codes.MSPCodes2Str[pc2fc['code']]:
-                            pipe.send([PORT,raw_bytes,False]) # to FC (proxy)
-                        else:
-                            pipe.send([PORT,raw_bytes,True]) # to FC (proxy)
+                    if 'MSP2_SENSOR' in msp_codes.MSPCodes2Str[pc2fc['code']]:
+                        pipe.send([PORT,raw_bytes,False]) # to FC (proxy)
+                    else:
+                        pipe.send([PORT,raw_bytes,True]) # to FC (proxy)
+                        if pipe.poll(timeout=1): # this timeout should only occur when connection is closed
                             raw_bytes = pipe.recv() # from FC (proxy)
-                            if raw_bytes:
-                                res = False
-                                try:
-                                    res = send(raw_bytes) # to PC
-                                finally:
-                                    if res:
-                                        logging.debug(f"[{PORT}] RAW message sent to PC: {raw_bytes}")
-                                    else:
-                                        break
+                            res = 0
+                            try:
+                                res = send(raw_bytes) # to PC
+                            finally:
+                                if res:
+                                    logging.debug(f"[{PORT}] RAW message sent to PC: {raw_bytes}")
+                                else:
+                                    break
 
                 logging.warning(f"[{PORT}] Connection closed!")
 
@@ -146,9 +149,10 @@ def main(ports, device, baudrate, timeout=1/1000):
         server_thread, _, pipe_thread, HOST = servers[PORT]
         if server_thread.is_alive():
             res = 0
-            while res == 0:
+            while res == 0: # raw_bytes will never be 0 length
                 try:
                     res = sconn.write(raw_bytes) # to FC (serial port)
+                    sconn.flush()
                 except serial.SerialTimeoutException:
                     logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent to FC (SerialTimeoutException)!")
                 
@@ -162,7 +166,6 @@ def main(ports, device, baudrate, timeout=1/1000):
                 logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
                 if fc2pc['packet_error'] != 0:
                     logging.error(f"[MAIN-{PORT}] packet_error receiving from serial port!!!!")
-                    raw_bytes = b''
                 pipe_local.send(raw_bytes) # to PC (TCP)
         else:
             raise RuntimeError(f"Server for {HOST, PORT} died!")
