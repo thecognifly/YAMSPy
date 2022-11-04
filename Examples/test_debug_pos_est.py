@@ -1,19 +1,26 @@
 import time
 import datetime
-import struct
 import os
 
 from yamspy import MSPy
 
 # $ python -m yamspy.msp_proxy --ports 54310 54320 54330 54340 54350
 
-serial_port = '/dev/ttyACM0'
-# serial_port = 54340
+# serial_port = '/dev/ttyACM0'
+serial_port = 54340
 
 FC_SEND_LOOP_TIME = 1/10
 
-with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False) as board:
-# with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
+EST_GPS_XY_VALID            = (1 << 0)
+EST_GPS_Z_VALID             = (1 << 1)
+EST_BARO_VALID              = (1 << 2)
+EST_SURFACE_VALID           = (1 << 3)
+EST_FLOW_VALID              = (1 << 4)
+EST_XY_VALID                = (1 << 5)
+EST_Z_VALID                 = (1 << 6)
+
+# with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False) as board:
+with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
     command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
                     'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
                     'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
@@ -48,8 +55,16 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False
                 
                 print(f"yaw={board.SENSOR_DATA['debug'][6]/10}degrees")
 
-                print(f"navEPV={board.SENSOR_DATA['debug'][7] & 0xFFFF}")
-                print(f"navEPH={(board.SENSOR_DATA['debug'][7] & 0xFFFF0000)>>16}")
+                print(f"navEPV={board.SENSOR_DATA['debug'][7] & 0x3FF}")
+                print(f"navEPH={(board.SENSOR_DATA['debug'][7] & 0xFFC00)>>10}")
+                flags = (board.SENSOR_DATA['debug'][7] & 0xFFF00000)>>20
+                print(f"EST_GPS_XY_VALID  = {bool(flags & EST_GPS_XY_VALID)}")
+                print(f"EST_GPS_Z_VALID   = {bool(flags & EST_GPS_Z_VALID)}")
+                print(f"EST_BARO_VALID    = {bool(flags & EST_BARO_VALID)}")
+                print(f"EST_SURFACE_VALID = {bool(flags & EST_SURFACE_VALID)}")
+                print(f"EST_FLOW_VALID    = {bool(flags & EST_FLOW_VALID)}")
+                print(f"EST_XY_VALID      = {bool(flags & EST_XY_VALID)}")
+                print(f"EST_Z_VALID       = {bool(flags & EST_Z_VALID)}")
             except TypeError as err:
                 pass
 
