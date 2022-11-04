@@ -1,12 +1,22 @@
+from math import cos
 import time
 import datetime
 import struct
+import os
 
 from yamspy import MSPy, msp_ctrl
 
 # $ python -m yamspy.msp_proxy --ports 54310 54320 54330 54340
-serial_port = 54320
-FC_SEND_LOOP_TIME = 1/10
+serial_port = 54330
+FC_SEND_LOOP_TIME = 1/5
+
+DISTANCE_BETWEEN_TWO_LONGITUDE_POINTS_AT_EQUATOR = 1.113195
+long_origin = -73.61319383049725 * 10000000
+lat_origin = 45.50496682273918 * 10000000
+gpsScaleLonDown = cos((abs(lat_origin) / 10000000) * 0.0174532925)
+
+lat_displace = lambda x: x/DISTANCE_BETWEEN_TWO_LONGITUDE_POINTS_AT_EQUATOR + lat_origin
+long_displace = lambda y: y/(gpsScaleLonDown*DISTANCE_BETWEEN_TWO_LONGITUDE_POINTS_AT_EQUATOR) + long_origin
 
 msp2_gps_format = '<BHIBBHHHHiiiiiiHHHBBBBB' # https://docs.python.org/3/library/struct.html#format-characters
 gps_template = {
@@ -37,7 +47,7 @@ gps_template = {
 
 
 
-with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True) as board:
+with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
     command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
                     'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
                     'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
@@ -48,17 +58,17 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
     try:
         mspSensorGpsDataMessage = gps_template.copy()
         mspSensorGpsDataMessage['instance'] = 1
-        mspSensorGpsDataMessage['fixType'] = 10
+        mspSensorGpsDataMessage['fixType'] = 99
         mspSensorGpsDataMessage['satellitesInView'] = mspSensorGpsDataMessage['fixType']
         mspSensorGpsDataMessage['gpsWeek'] = 0xFFFF
 
         ############ SEND GPS DATA #############
         # gpsSol.llh.lon   = pkt->longitude;
-        mspSensorGpsDataMessage['longitude'] = -73.61319383049725 * 10000000
+        mspSensorGpsDataMessage['longitude'] = long_origin
         # gpsSol.llh.lat   = pkt->latitude;
-        mspSensorGpsDataMessage['latitude'] = 45.50496682273918 * 10000000
+        mspSensorGpsDataMessage['latitude'] = lat_origin
         # gpsSol.llh.alt   = pkt->mslAltitude;
-        mspSensorGpsDataMessage['mslAltitude'] = 5000 # [cm]
+        mspSensorGpsDataMessage['mslAltitude'] = 0 # [cm]
         # gpsSol.velNED[X] = pkt->nedVelNorth;
         mspSensorGpsDataMessage['nedVelNorth'] = 0
         # gpsSol.velNED[Y] = pkt->nedVelEast;
@@ -68,26 +78,17 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
         # gpsSol.groundSpeed = calc_length_pythagorean_2D((float)pkt->nedVelNorth, (float)pkt->nedVelEast);
         # gpsSol.groundCourse = pkt->groundCourse / 10;   // in deg * 10
         mspSensorGpsDataMessage['groundCourse'] = 0
+        mspSensorGpsDataMessage['trueYaw'] = 0
         # gpsSol.eph = gpsConstrainEPE(pkt->horizontalPosAccuracy / 10);
         mspSensorGpsDataMessage['horizontalPosAccuracy'] = 10
         # gpsSol.epv = gpsConstrainEPE(pkt->verticalPosAccuracy / 10);
         mspSensorGpsDataMessage['verticalPosAccuracy'] = 10
         # gpsSol.hdop = gpsConstrainHDOP(pkt->hdop);
-        mspSensorGpsDataMessage['hdop'] = 100
-        # gpsSol.time.year   = pkt->year;
-        # mspSensorGpsDataMessage['year'] = 2022
-        # # gpsSol.time.month  = pkt->month;
-        # mspSensorGpsDataMessage['month'] = 1
-        # # gpsSol.time.day    = pkt->day;
-        # mspSensorGpsDataMessage['day'] = 2
-        # # gpsSol.time.hours  = pkt->hour;
-        # mspSensorGpsDataMessage['hour'] = 3
-        # # gpsSol.time.minutes = pkt->min;
-        # mspSensorGpsDataMessage['min'] = 4
-        # # gpsSol.time.seconds = pkt->sec;
-        # mspSensorGpsDataMessage['sec'] = 5
+        mspSensorGpsDataMessage['hdop'] = 10
         
+        count = 0
         while True:
+            os.system('clear')
             now = datetime.datetime.now()
             print(now)
             mspSensorGpsDataMessage['year'] = now.year
@@ -98,18 +99,18 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
             mspSensorGpsDataMessage['sec'] = now.second
             gps_data = struct.pack(msp2_gps_format, *[int(i) for i in mspSensorGpsDataMessage.values()])
 
-            # Ask GPS data
-            if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_GPS'], data=[]):
-                print("MSP_RAW_GPS data sent!")
-                dataHandler = board.receive_msg()
-                print("MSP_RAW_GPS ACK data received!")
-                board.process_recv_data(dataHandler)
-                print("MSP_RAW_GPS data processed!")
-            else:
-                print("MSP_RAW_GPS not sent!")
+            # # Ask GPS data
+            # if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_GPS'], data=[]):
+            #     print("MSP_RAW_GPS data sent!")
+            #     dataHandler = board.receive_msg()
+            #     print("MSP_RAW_GPS ACK data received!")
+            #     board.process_recv_data(dataHandler)
+            #     print("MSP_RAW_GPS data processed!")
+            # else:
+            #     print("MSP_RAW_GPS not sent!")
 
-            # Received GPS data
-            print(board.GPS_DATA)
+            # # Received GPS data
+            # print(board.GPS_DATA)
 
             # Send GPS data
             if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_GPS'], data=gps_data):
@@ -117,6 +118,14 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
             else:
                 print("MSP2_SENSOR_GPS not sent!")
 
+            MAX_COUNT = 50
+            if count>MAX_COUNT:
+                mspSensorGpsDataMessage['latitude'] = lat_displace(666)
+                mspSensorGpsDataMessage['longitude'] = long_displace(999)
+                mspSensorGpsDataMessage['mslAltitude'] = 100
+            else:
+                print(f"Countdown: {MAX_COUNT-count}")
+            count += 1
             time.sleep(FC_SEND_LOOP_TIME)
 
     except KeyboardInterrupt:
