@@ -210,11 +210,11 @@ def keyboard_controller(screen):
                 #
                 elif char == ord('m') or char == ord('M'):
                     if CMDS['aux2'] <= 1300:
-                        cursor_msg = 'Horizon Mode...'
+                        cursor_msg = 'NAS POSHOLD Mode...'
                         CMDS['aux2'] = 1500
                     elif 1700 > CMDS['aux2'] > 1300:
-                        cursor_msg = 'Flip Mode...'
-                        CMDS['aux2'] = 2000
+                        cursor_msg = 'NAS ALTHOLD Mode...'
+                        CMDS['aux2'] = 1900
                     elif CMDS['aux2'] >= 1700:
                         cursor_msg = 'Angle Mode...'
                         CMDS['aux2'] = 1000

@@ -54,7 +54,7 @@ from yamspy import MSPy
 
 # Max periods for:
 CTRL_LOOP_TIME = 1/1000
-SLOW_MSGS_LOOP_TIME = 1/5 # these messages take a lot of time slowing down the loop...
+SLOW_MSGS_LOOP_TIME = 1/10 # these messages take a lot of time slowing down the loop...
 
 NO_OF_CYCLES_AVERAGE_GUI_TIME = 10
 
@@ -206,11 +206,11 @@ def keyboard_controller(screen):
                 #
                 elif char == ord('m') or char == ord('M'):
                     if CMDS['aux2'] <= 1300:
-                        cursor_msg = 'Horizon Mode...'
+                        cursor_msg = 'NAS POSHOLD Mode...'
                         CMDS['aux2'] = 1500
                     elif 1700 > CMDS['aux2'] > 1300:
-                        cursor_msg = 'Flip Mode...'
-                        CMDS['aux2'] = 2000
+                        cursor_msg = 'NAS ALTHOLD Mode...'
+                        CMDS['aux2'] = 1900
                     elif CMDS['aux2'] >= 1700:
                         cursor_msg = 'Angle Mode...'
                         CMDS['aux2'] = 1000

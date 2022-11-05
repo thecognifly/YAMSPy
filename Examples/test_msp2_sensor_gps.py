@@ -77,8 +77,8 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True,
         mspSensorGpsDataMessage['nedVelDown'] = 0
         # gpsSol.groundSpeed = calc_length_pythagorean_2D((float)pkt->nedVelNorth, (float)pkt->nedVelEast);
         # gpsSol.groundCourse = pkt->groundCourse / 10;   // in deg * 10
-        mspSensorGpsDataMessage['groundCourse'] = 0
-        mspSensorGpsDataMessage['trueYaw'] = 0
+        mspSensorGpsDataMessage['groundCourse'] = 15000 # deg * 100, 0..36000
+        mspSensorGpsDataMessage['trueYaw'] = 15000
         # gpsSol.eph = gpsConstrainEPE(pkt->horizontalPosAccuracy / 10);
         mspSensorGpsDataMessage['horizontalPosAccuracy'] = 10
         # gpsSol.epv = gpsConstrainEPE(pkt->verticalPosAccuracy / 10);
@@ -122,7 +122,7 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True,
             if count>MAX_COUNT:
                 mspSensorGpsDataMessage['latitude'] = lat_displace(666)
                 mspSensorGpsDataMessage['longitude'] = long_displace(999)
-                mspSensorGpsDataMessage['mslAltitude'] = 100
+                mspSensorGpsDataMessage['mslAltitude'] = 100 #cm => this is not working after isImuHeadingValid
             else:
                 print(f"Countdown: {MAX_COUNT-count}")
             count += 1
