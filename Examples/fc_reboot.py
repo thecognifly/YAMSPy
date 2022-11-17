@@ -39,9 +39,14 @@ from yamspy import MSPy
 # https://pyserial.readthedocs.io/en/latest/shortintro.html
 #
 #
-serial_port = "/dev/serial0"
 
 if __name__ == '__main__':
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description='Command line example.')
+    parser.add_argument('--serialport', action='store', default="/dev/serial0", help='serial port')
+    arguments = parser.parse_args()
+    serial_port = arguments.serialport
+
     with MSPy(device=serial_port, loglevel='WARNING') as board:
         board.reboot() # sometimes it's necessary to reboot your board
                        # like after a small crash, or the flight controller will not arm again

@@ -39,20 +39,26 @@ from yamspy import MSPy
 # https://pyserial.readthedocs.io/en/latest/shortintro.html
 #
 #
-serial_port = "/dev/ttyS0"
 
-with MSPy(device=serial_port, loglevel='DEBUG', baudrate=115200) as board:
-    # Read info from the FC
-    # Please, pay attention to the way it works:
-    # 1. Message is sent: MSP_ALTITUDE without any payload (data=[])
-    if board.send_RAW_msg(MSPy.MSPCodes['MSP_ALTITUDE'], data=[]):
-        # 2. Response msg from the flight controller is received
-        dataHandler = board.receive_msg()
-        # 3. The msg is parsed
-        board.process_recv_data(dataHandler)
-        # 4. After the parser, the instance is populated.
-        # In this example, SENSOR_DATA has its altitude value updated.
-        print(board.SENSOR_DATA['altitude'])
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description='Command line example.')
+    parser.add_argument('--serialport', action='store', default="/dev/serial0", help='serial port')
+    arguments = parser.parse_args()
+    serial_port = arguments.serialport
+
+    with MSPy(device=serial_port, loglevel='DEBUG', baudrate=115200) as board:
+        # Read info from the FC
+        # Please, pay attention to the way it works:
+        # 1. Message is sent: MSP_ALTITUDE without any payload (data=[])
+        if board.send_RAW_msg(MSPy.MSPCodes['MSP_ALTITUDE'], data=[]):
+            # 2. Response msg from the flight controller is received
+            dataHandler = board.receive_msg()
+            # 3. The msg is parsed
+            board.process_recv_data(dataHandler)
+            # 4. After the parser, the instance is populated.
+            # In this example, SENSOR_DATA has its altitude value updated.
+            print(board.SENSOR_DATA['altitude'])
 
 # For some msgs there are available specialized methods to read them faster:
 # fast_read_altitude

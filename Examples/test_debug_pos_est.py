@@ -7,7 +7,7 @@ from yamspy import MSPy
 # $ python -m yamspy.msp_proxy --ports 54310 54320 54330 54340 54350
 
 # serial_port = '/dev/ttyACM0'
-serial_port = 54340
+# serial_port = 54340
 
 FC_SEND_LOOP_TIME = 1/10
 
@@ -19,60 +19,67 @@ EST_FLOW_VALID              = (1 << 4)
 EST_XY_VALID                = (1 << 5)
 EST_Z_VALID                 = (1 << 6)
 
-# with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False) as board:
-with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
-    command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
-                    'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
-                    'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
-    for msg in command_list:
-        if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-            dataHandler = board.receive_msg()
-            board.process_recv_data(dataHandler)
-    try:       
-        while True:
-            os.system('clear')
-            now = datetime.datetime.now()
-            print(now)
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description='Command line example.')
+    parser.add_argument('--serialport', action='store', default="/dev/serial0", help='serial port')
+    arguments = parser.parse_args()
+    serial_port = arguments.serialport
 
-            # Ask MSP2_NAV_DEBUG data
-            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_INAV_DEBUG'], data=[]):
-                print("MSP2_INAV_DEBUG data sent!")
+    # with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=False) as board:
+    with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
+        command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
+                        'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
+                        'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
+        for msg in command_list:
+            if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
                 dataHandler = board.receive_msg()
-                print("MSP2_INAV_DEBUG ACK data received!")
                 board.process_recv_data(dataHandler)
-                print("MSP2_INAV_DEBUG data processed!")
-            else:
-                print("MSP2_INAV_DEBUG not sent!")
+        try:
+            while True:
+                os.system('clear')
+                now = datetime.datetime.now()
+                print(now)
 
-            print(board.SENSOR_DATA['debug'])
+                # Ask MSP2_NAV_DEBUG data
+                if board.send_RAW_msg(MSPy.MSPCodes['MSP2_INAV_DEBUG'], data=[]):
+                    print("MSP2_INAV_DEBUG data sent!")
+                    dataHandler = board.receive_msg()
+                    print("MSP2_INAV_DEBUG ACK data received!")
+                    board.process_recv_data(dataHandler)
+                    print("MSP2_INAV_DEBUG data processed!")
+                else:
+                    print("MSP2_INAV_DEBUG not sent!")
 
-            try:
-                for i,v in enumerate(['x', 'y', 'z']):
-                    print(f"{v}={board.SENSOR_DATA['debug'][i]/1000.0}")
-            
-                for i,v in enumerate(['vx', 'vy', 'vz']):
-                    print(f"{v}={board.SENSOR_DATA['debug'][i+3]/1000.0}")
-                
-                print(f"yaw={board.SENSOR_DATA['debug'][6]/10}degrees")
+                print(board.SENSOR_DATA['debug'])
 
-                print(f"navEPV={board.SENSOR_DATA['debug'][7] & 0x3FF}")
-                print(f"navEPH={(board.SENSOR_DATA['debug'][7] & 0xFFC00)>>10}")
-                flags = (board.SENSOR_DATA['debug'][7] & 0xFFF00000)>>20
-                print(f"EST_GPS_XY_VALID  = {bool(flags & EST_GPS_XY_VALID)}")
-                print(f"EST_GPS_Z_VALID   = {bool(flags & EST_GPS_Z_VALID)}")
-                print(f"EST_BARO_VALID    = {bool(flags & EST_BARO_VALID)}")
-                print(f"EST_SURFACE_VALID = {bool(flags & EST_SURFACE_VALID)}")
-                print(f"EST_FLOW_VALID    = {bool(flags & EST_FLOW_VALID)}")
-                print(f"EST_XY_VALID      = {bool(flags & EST_XY_VALID)}")
-                print(f"EST_Z_VALID       = {bool(flags & EST_Z_VALID)}")
-            except TypeError as err:
-                pass
+                try:
+                    for i,v in enumerate(['x', 'y', 'z']):
+                        print(f"{v}={board.SENSOR_DATA['debug'][i]/1000.0}")
+
+                    for i,v in enumerate(['vx', 'vy', 'vz']):
+                        print(f"{v}={board.SENSOR_DATA['debug'][i+3]/1000.0}")
+
+                    print(f"yaw={board.SENSOR_DATA['debug'][6]/10}degrees")
+
+                    print(f"navEPV={board.SENSOR_DATA['debug'][7] & 0x3FF}")
+                    print(f"navEPH={(board.SENSOR_DATA['debug'][7] & 0xFFC00)>>10}")
+                    flags = (board.SENSOR_DATA['debug'][7] & 0xFFF00000)>>20
+                    print(f"EST_GPS_XY_VALID  = {bool(flags & EST_GPS_XY_VALID)}")
+                    print(f"EST_GPS_Z_VALID   = {bool(flags & EST_GPS_Z_VALID)}")
+                    print(f"EST_BARO_VALID    = {bool(flags & EST_BARO_VALID)}")
+                    print(f"EST_SURFACE_VALID = {bool(flags & EST_SURFACE_VALID)}")
+                    print(f"EST_FLOW_VALID    = {bool(flags & EST_FLOW_VALID)}")
+                    print(f"EST_XY_VALID      = {bool(flags & EST_XY_VALID)}")
+                    print(f"EST_Z_VALID       = {bool(flags & EST_Z_VALID)}")
+                except TypeError as err:
+                    pass
 
 
-            time.sleep(FC_SEND_LOOP_TIME)
+                time.sleep(FC_SEND_LOOP_TIME)
 
-    except KeyboardInterrupt:
-        print("stop")
-    finally:
-        pass
-        #board.reboot()
+        except KeyboardInterrupt:
+            print("stop")
+        finally:
+            pass
+            #board.reboot()

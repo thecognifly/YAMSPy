@@ -46,90 +46,96 @@ gps_template = {
 }
 
 
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description='Command line example.')
+    parser.add_argument('--serialport', action='store', default="/dev/serial0", help='serial port')
+    arguments = parser.parse_args()
+    serial_port = arguments.serialport
 
-with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
-    command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
-                    'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
-                    'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
-    for msg in command_list:
-        if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-            dataHandler = board.receive_msg()
-            board.process_recv_data(dataHandler)
-    try:
-        mspSensorGpsDataMessage = gps_template.copy()
-        mspSensorGpsDataMessage['instance'] = 1
-        mspSensorGpsDataMessage['fixType'] = 99
-        mspSensorGpsDataMessage['satellitesInView'] = mspSensorGpsDataMessage['fixType']
-        mspSensorGpsDataMessage['gpsWeek'] = 0xFFFF
+    with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
+        command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
+                        'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
+                        'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
+        for msg in command_list:
+            if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+                dataHandler = board.receive_msg()
+                board.process_recv_data(dataHandler)
+        try:
+            mspSensorGpsDataMessage = gps_template.copy()
+            mspSensorGpsDataMessage['instance'] = 1
+            mspSensorGpsDataMessage['fixType'] = 99
+            mspSensorGpsDataMessage['satellitesInView'] = mspSensorGpsDataMessage['fixType']
+            mspSensorGpsDataMessage['gpsWeek'] = 0xFFFF
 
-        ############ SEND GPS DATA #############
-        # gpsSol.llh.lon   = pkt->longitude;
-        mspSensorGpsDataMessage['longitude'] = long_origin
-        # gpsSol.llh.lat   = pkt->latitude;
-        mspSensorGpsDataMessage['latitude'] = lat_origin
-        # gpsSol.llh.alt   = pkt->mslAltitude;
-        mspSensorGpsDataMessage['mslAltitude'] = 0 # [cm]
-        # gpsSol.velNED[X] = pkt->nedVelNorth;
-        mspSensorGpsDataMessage['nedVelNorth'] = 0
-        # gpsSol.velNED[Y] = pkt->nedVelEast;
-        mspSensorGpsDataMessage['nedVelEast'] = 0
-        # gpsSol.velNED[Z] = pkt->nedVelDown;
-        mspSensorGpsDataMessage['nedVelDown'] = 0
-        # gpsSol.groundSpeed = calc_length_pythagorean_2D((float)pkt->nedVelNorth, (float)pkt->nedVelEast);
-        # gpsSol.groundCourse = pkt->groundCourse / 10;   // in deg * 10
-        mspSensorGpsDataMessage['groundCourse'] = 15000 # deg * 100, 0..36000
-        mspSensorGpsDataMessage['trueYaw'] = 15000
-        # gpsSol.eph = gpsConstrainEPE(pkt->horizontalPosAccuracy / 10);
-        mspSensorGpsDataMessage['horizontalPosAccuracy'] = 10
-        # gpsSol.epv = gpsConstrainEPE(pkt->verticalPosAccuracy / 10);
-        mspSensorGpsDataMessage['verticalPosAccuracy'] = 10
-        # gpsSol.hdop = gpsConstrainHDOP(pkt->hdop);
-        mspSensorGpsDataMessage['hdop'] = 10
-        
-        count = 0
-        while True:
-            os.system('clear')
-            now = datetime.datetime.now()
-            print(now)
-            mspSensorGpsDataMessage['year'] = now.year
-            mspSensorGpsDataMessage['month'] = now.month
-            mspSensorGpsDataMessage['day'] = now.day
-            mspSensorGpsDataMessage['hour'] = now.hour
-            mspSensorGpsDataMessage['min'] = now.minute
-            mspSensorGpsDataMessage['sec'] = now.second
-            gps_data = struct.pack(msp2_gps_format, *[int(i) for i in mspSensorGpsDataMessage.values()])
+            ############ SEND GPS DATA #############
+            # gpsSol.llh.lon   = pkt->longitude;
+            mspSensorGpsDataMessage['longitude'] = long_origin
+            # gpsSol.llh.lat   = pkt->latitude;
+            mspSensorGpsDataMessage['latitude'] = lat_origin
+            # gpsSol.llh.alt   = pkt->mslAltitude;
+            mspSensorGpsDataMessage['mslAltitude'] = 0 # [cm]
+            # gpsSol.velNED[X] = pkt->nedVelNorth;
+            mspSensorGpsDataMessage['nedVelNorth'] = 0
+            # gpsSol.velNED[Y] = pkt->nedVelEast;
+            mspSensorGpsDataMessage['nedVelEast'] = 0
+            # gpsSol.velNED[Z] = pkt->nedVelDown;
+            mspSensorGpsDataMessage['nedVelDown'] = 0
+            # gpsSol.groundSpeed = calc_length_pythagorean_2D((float)pkt->nedVelNorth, (float)pkt->nedVelEast);
+            # gpsSol.groundCourse = pkt->groundCourse / 10;   // in deg * 10
+            mspSensorGpsDataMessage['groundCourse'] = 15000 # deg * 100, 0..36000
+            mspSensorGpsDataMessage['trueYaw'] = 15000
+            # gpsSol.eph = gpsConstrainEPE(pkt->horizontalPosAccuracy / 10);
+            mspSensorGpsDataMessage['horizontalPosAccuracy'] = 10
+            # gpsSol.epv = gpsConstrainEPE(pkt->verticalPosAccuracy / 10);
+            mspSensorGpsDataMessage['verticalPosAccuracy'] = 10
+            # gpsSol.hdop = gpsConstrainHDOP(pkt->hdop);
+            mspSensorGpsDataMessage['hdop'] = 10
 
-            # # Ask GPS data
-            # if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_GPS'], data=[]):
-            #     print("MSP_RAW_GPS data sent!")
-            #     dataHandler = board.receive_msg()
-            #     print("MSP_RAW_GPS ACK data received!")
-            #     board.process_recv_data(dataHandler)
-            #     print("MSP_RAW_GPS data processed!")
-            # else:
-            #     print("MSP_RAW_GPS not sent!")
+            count = 0
+            while True:
+                os.system('clear')
+                now = datetime.datetime.now()
+                print(now)
+                mspSensorGpsDataMessage['year'] = now.year
+                mspSensorGpsDataMessage['month'] = now.month
+                mspSensorGpsDataMessage['day'] = now.day
+                mspSensorGpsDataMessage['hour'] = now.hour
+                mspSensorGpsDataMessage['min'] = now.minute
+                mspSensorGpsDataMessage['sec'] = now.second
+                gps_data = struct.pack(msp2_gps_format, *[int(i) for i in mspSensorGpsDataMessage.values()])
 
-            # # Received GPS data
-            # print(board.GPS_DATA)
+                # # Ask GPS data
+                # if board.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_GPS'], data=[]):
+                #     print("MSP_RAW_GPS data sent!")
+                #     dataHandler = board.receive_msg()
+                #     print("MSP_RAW_GPS ACK data received!")
+                #     board.process_recv_data(dataHandler)
+                #     print("MSP_RAW_GPS data processed!")
+                # else:
+                #     print("MSP_RAW_GPS not sent!")
 
-            # Send GPS data
-            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_GPS'], data=gps_data):
-                print(f"MSP2_SENSOR_GPS data {gps_data} sent!")
-            else:
-                print("MSP2_SENSOR_GPS not sent!")
+                # # Received GPS data
+                # print(board.GPS_DATA)
 
-            MAX_COUNT = 50
-            if count>MAX_COUNT:
-                mspSensorGpsDataMessage['latitude'] = lat_displace(666)
-                mspSensorGpsDataMessage['longitude'] = long_displace(999)
-                mspSensorGpsDataMessage['mslAltitude'] = 100 #cm => this is not working after isImuHeadingValid
-            else:
-                print(f"Countdown: {MAX_COUNT-count}")
-            count += 1
-            time.sleep(FC_SEND_LOOP_TIME)
+                # Send GPS data
+                if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_GPS'], data=gps_data):
+                    print(f"MSP2_SENSOR_GPS data {gps_data} sent!")
+                else:
+                    print("MSP2_SENSOR_GPS not sent!")
 
-    except KeyboardInterrupt:
-        print("stop")
-    finally:
-        pass
-        #board.reboot()
+                MAX_COUNT = 50
+                if count>MAX_COUNT:
+                    mspSensorGpsDataMessage['latitude'] = lat_displace(666)
+                    mspSensorGpsDataMessage['longitude'] = long_displace(999)
+                    mspSensorGpsDataMessage['mslAltitude'] = 100 #cm => this is not working after isImuHeadingValid
+                else:
+                    print(f"Countdown: {MAX_COUNT-count}")
+                count += 1
+                time.sleep(FC_SEND_LOOP_TIME)
+
+        except KeyboardInterrupt:
+            print("stop")
+        finally:
+            pass
+            #board.reboot()
