@@ -122,6 +122,7 @@ class MSPy:
             'boardName':                        "",
             'manufacturerId':                   "",
             'signature':                        [],
+            'cpuload':                          0,
             'mcuTypeId':                        255,
         }
 
@@ -163,6 +164,7 @@ class MSPy:
         }
 
         self.ANALOG = {}
+        self.ANALOG['voltage'] = 0.0
 
         self.VOLTAGE_METERS = []
 
@@ -573,14 +575,31 @@ class MSPy:
             1: "PREVENT_ARMING",
             2: "ARMED",
             3: "WAS_EVER_ARMED",
+            4: "SIMULATOR_MODE",
+            7: "BLOCKED_FAILSAFE_SYSTEM",
             8: "BLOCKED_UAV_NOT_LEVEL",
             9: "BLOCKED_SENSORS_CALIBRATING",
             10: "BLOCKED_SYSTEM_OVERLOADED",
             11: "BLOCKED_NAVIGATION_SAFETY",
             12: "BLOCKED_COMPASS_NOT_CALIBRATED",
             13: "BLOCKED_ACCELEROMETER_NOT_CALIBRATED",
+            14: "BLOCKED_ARMING_DISABLED_ARM_SWITCH",
             15: "BLOCKED_HARDWARE_FAILURE",
-            26: "BLOCKED_INVALID_SETTING"
+            16: "BLOCKED_ARMING_DISABLED_BOXFAILSAFE",
+            17: "BLOCKED_ARMING_DISABLED_BOXKILLSWITCH",
+            18: "BLOCKED_ARMING_DISABLED_RC_LINK",
+            19: "BLOCKED_ARMING_DISABLED_THROTTLE",
+            20: "BLOCKED_ARMING_DISABLED_CLI",
+            21: "BLOCKED_ARMING_DISABLED_CMS_MENU",
+            22: "BLOCKED_ARMING_DISABLED_OSD_MENU",
+            23: "BLOCKED_ARMING_DISABLED_ROLLPITCH_NOT_CENTERED",
+            24: "BLOCKED_ARMING_DISABLED_SERVO_AUTOTRIM",
+            25: "BLOCKED_ARMING_DISABLED_OOM",
+            26: "BLOCKED_INVALID_SETTING",
+            27: "BLOCKED_ARMING_DISABLED_PWM_OUTPUT_ERROR",
+            28: "BLOCKED_ARMING_DISABLED_NO_PREARM",
+            29: "BLOCKED_ARMING_DISABLED_DSHOT_BEEPER",
+            30: "BLOCKED_ARMING_DISABLED_LANDING_DETECTED",
             }
 
         if logfilename:
