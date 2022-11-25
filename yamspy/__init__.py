@@ -76,7 +76,7 @@ class MSPy:
         Parameters
         ----------
         device : str
-            The location of the serial device (e.g. "/dev/ttyACM0")
+            The location of the serial device (e.g. "/dev/ttyACM0") or TCP port when use_tcp==True
         baudrate : int, optional
             Serial connection speed (default is 115200)
         trials : int, optional
@@ -88,6 +88,12 @@ class MSPy:
             Use 'a' for append and 'w' for overriding (default is 'a'). 
         loglevel : str, optional
             The loglevel passed to logging (default is 'DEBUG')
+        timeout : float, optional
+            Value used for serial port and TCP timeouts.
+        use_tcp : bool, optional
+            Uses TCP instead of the serial port.
+        min_time_between_writes : float, optional
+            Adds delays to make sure messages aren't sent faster than this value.
         """
 
         self.CONFIG = {
@@ -696,7 +702,7 @@ class MSPy:
         for _ in range(trials):
             try:
                 if self.use_tcp:
-                    self.start(port=self.device, timeout=self.timeout)
+                    self.start(port=int(self.device), timeout=self.timeout)
                 else:
                     self.start()
 
