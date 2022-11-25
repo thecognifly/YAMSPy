@@ -717,7 +717,18 @@ class MSPy:
     def basic_info(self):
         """Basic info about the flight controller to distinguish between the many flavours.
         """
-        for msg in ['MSP_API_VERSION', 'MSP_FC_VARIANT']:
+        msg = 'MSP_API_VERSION'
+        while self.CONFIG['apiVersion'] == '0.0.0':
+            print(f"Waiting for {msg} reply...")
+            sent = 0
+            while sent<=0:
+                sent = self.send_RAW_msg(MSPy.MSPCodes[msg], data=[])
+            dataHandler = self.receive_msg()
+            self.process_recv_data(dataHandler)
+
+        msg = 'MSP_FC_VARIANT'
+        while self.CONFIG['flightControllerIdentifier'] == '':
+            print(f"Waiting for {msg} reply...")
             sent = 0
             while sent<=0:
                 sent = self.send_RAW_msg(MSPy.MSPCodes[msg], data=[])
@@ -732,6 +743,7 @@ class MSPy:
         if self.INAV:
             basic_info_cmd_list.append('MSP2_INAV_ANALOG')
             basic_info_cmd_list.append('MSP_VOLTAGE_METER_CONFIG')
+            basic_info_cmd_list.append('MSP2_INAV_STATUS')
 
         for msg in basic_info_cmd_list:
             sent = 0
@@ -1142,6 +1154,16 @@ class MSPy:
             self.CONFIG['armingDisableFlags'] = self.readbytes(data, size=32, unsigned=True)
         else:
             self.CONFIG['armingDisableFlags'] = self.readbytes(data, size=16, unsigned=True)
+
+    def process_MSP2_INAV_STATUS(self, data):
+        self.CONFIG['cycleTime'] = self.readbytes(data, size=16, unsigned=True)
+        self.CONFIG['i2cError'] = self.readbytes(data, size=16, unsigned=True)
+        self.CONFIG['activeSensors'] = self.readbytes(data, size=16, unsigned=True)
+        self.CONFIG['cpuload'] = self.readbytes(data, size=16, unsigned=True)
+        self.CONFIG['profile'] = self.readbytes(data, size=8, unsigned=True)
+        self.CONFIG['armingDisableFlags'] = self.readbytes(data, size=32, unsigned=True)
+        self.CONFIG['mode'] = self.readbytes(data, size=32, unsigned=True)
+        
 
     def process_MSP_RAW_IMU(self, data):
         # /512 for mpu6050, /256 for mma
