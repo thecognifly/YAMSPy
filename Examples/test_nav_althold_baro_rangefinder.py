@@ -56,9 +56,9 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
             if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_BAROMETER'], data=baro_data):
                 print(f"MSP2_SENSOR_BAROMETER data {baro_data} sent!")
 
-            # # Send rangefinder data
-            # if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_RANGEFINDER'], data=range_data):
-            #     print(f"MSP2_SENSOR_RANGEFINDER data {range_data} sent!")
+            # Send rangefinder data
+            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_RANGEFINDER'], data=range_data):
+                print(f"MSP2_SENSOR_RANGEFINDER data {range_data} sent!")
 
             time.sleep(FC_SEND_LOOP_TIME)
 
@@ -70,9 +70,9 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True)
             if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_BAROMETER'], data=baro_data):
                 print(f"MSP2_SENSOR_BAROMETER data {baro_data} sent!")
 
-            # # Send rangefinder data
-            # if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_RANGEFINDER'], data=range_data):
-            #     print(f"MSP2_SENSOR_RANGEFINDER data {range_data} sent!")
+            # Send rangefinder data
+            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_RANGEFINDER'], data=range_data):
+                print(f"MSP2_SENSOR_RANGEFINDER data {range_data} sent!")
 
 
             time.sleep(FC_SEND_LOOP_TIME)
