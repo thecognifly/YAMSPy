@@ -144,6 +144,7 @@ def keyboard_controller(screen):
             if board.INAV:
                 command_list.append('MSP2_INAV_ANALOG')
                 command_list.append('MSP_VOLTAGE_METER_CONFIG')
+                command_list.append('MSP2_INAV_STATUS')
 
             for msg in command_list: 
                 code_value = MSPy.MSPCodes[msg]
@@ -168,7 +169,10 @@ def keyboard_controller(screen):
             screen.addstr(17, 50, "name: {}".format(board.CONFIG['name']))
 
 
-            slow_msgs = cycle(['MSP_ANALOG', 'MSP_STATUS_EX', 'MSP_MOTOR', 'MSP_RC'])
+            if board.INAV:
+                slow_msgs = cycle(['MSP_ANALOG', 'MSP2_INAV_STATUS', 'MSP_MOTOR', 'MSP_RC'])
+            else:
+                slow_msgs = cycle(['MSP_ANALOG', 'MSP_STATUS_EX', 'MSP_MOTOR', 'MSP_RC'])
 
             cursor_msg = ""
             last_loop_time = last_slow_msg_time = last_cycleTime = time.time()
@@ -284,12 +288,13 @@ def keyboard_controller(screen):
                         screen.addstr(8, 24, voltage_msg, curses.A_BOLD + curses.A_BLINK)
                         screen.clrtoeol()
 
-                    elif next_msg == 'MSP_STATUS_EX':
+                    elif next_msg == 'MSP2_INAV_STATUS':
                         ARMED = board.bit_check(board.CONFIG['mode'],0)
                         screen.addstr(5, 0, "ARMED: {}".format(ARMED), curses.A_BOLD)
                         screen.clrtoeol()
 
                         screen.addstr(5, 50, "armingDisableFlags: {}".format(board.process_armingDisableFlags(board.CONFIG['armingDisableFlags'])))
+                        # screen.addstr(5, 50, "armingDisableFlags: {0:b}".format(board.CONFIG['armingDisableFlags']))
                         screen.clrtoeol()
 
                         screen.addstr(6, 0, "cpuload: {}".format(board.CONFIG['cpuload']))

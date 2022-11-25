@@ -141,6 +141,7 @@ def keyboard_controller(screen):
             if board.INAV:
                 command_list.append('MSP2_INAV_ANALOG')
                 command_list.append('MSP_VOLTAGE_METER_CONFIG')
+                command_list.append('MSP2_INAV_STATUS')
 
             for msg in command_list: 
                 code_value = MSPy.MSPCodes[msg]
@@ -163,8 +164,10 @@ def keyboard_controller(screen):
             screen.addstr(17, 0, "boardName: {}".format(board.CONFIG['boardName']))
             screen.addstr(17, 50, "name: {}".format(board.CONFIG['name']))
 
-
-            slow_msgs = cycle(['MSP_ANALOG', 'MSP_STATUS_EX', 'MSP_MOTOR', 'MSP_RC'])
+            if board.INAV:
+                slow_msgs = cycle(['MSP_ANALOG', 'MSP2_INAV_STATUS', 'MSP_MOTOR', 'MSP_RC'])
+            else:
+                slow_msgs = cycle(['MSP_ANALOG', 'MSP_STATUS_EX', 'MSP_MOTOR', 'MSP_RC'])
 
             cursor_msg = ""
             last_loop_time = last_slow_msg_time = last_cycleTime = time.time()
