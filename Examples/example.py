@@ -36,51 +36,62 @@ from yamspy import MSPy
 This simple example will send all possible MSP commands, but the ones from avoid_list.
 """
 
-# This list has commands that may cause havok... 
-# I may have missed something, so you were warned ;)
-avoid_list = ['MSP_DATAFLASH_ERASE','MSP_DATAFLASH_READ','MSP_EEPROM_WRITE']
 
-#
-# On Linux, your serial port will probably be something like
-# /dev/ttyACM0 or /dev/ttyS0 or the same names with numbers different from 0
-#
-# On Windows, I would expect it to be 
-# COM1 or COM2 or COM3...
-#
-# This library uses pyserial, so if you have more questions try to check its docs:
-# https://pyserial.readthedocs.io/en/latest/shortintro.html
-#
-#
-serial_port = "/dev/serial0"
+def example(serial_port):
 
-# As you run this script, it will save a file MSPy.log with a very detailed info about all the 
-# things sent and received through the serial port because of the argument loglevel='DEBUG'. 
-with MSPy(device=serial_port, logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG') as board:
-    if board==1:
-        print("An error ocurred... probably the serial port is not available ;)")
-        sys.exit(1)
+    # This list has commands that may cause havok...
+    # I may have missed something, so you were warned ;)
+    avoid_list = ['MSP_DATAFLASH_ERASE','MSP_DATAFLASH_READ','MSP_EEPROM_WRITE']
 
     #
-    # The commands bellow will list / test all the possible messages implemented here
-    # skipping the ones that SET or try to crazy stuff... 
-    for msg in MSPy.MSPCodes.keys():
-        if 'SET' not in msg:
-            if msg not in avoid_list:
-                if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-                    print('{} >>> requested!'.format(msg))
-                    dataHandler = board.receive_msg()
-                    codestr = MSPy.MSPCodes2Str.get(dataHandler['code'])
-                    if codestr:
-                        print('Received >>> {}'.format(codestr))
-                        board.process_recv_data(dataHandler)
-                    elif dataHandler['packet_error'] == 1:
-                        print('Received >>> ERROR!')
+    # On Linux, your serial port will probably be something like
+    # /dev/ttyACM0 or /dev/ttyS0 or the same names with numbers different from 0
+    #
+    # On Windows, I would expect it to be
+    # COM1 or COM2 or COM3...
+    #
+    # This library uses pyserial, so if you have more questions try to check its docs:
+    # https://pyserial.readthedocs.io/en/latest/shortintro.html
+    #
+    #
 
-    print("armingDisableFlags: {}".format(board.process_armingDisableFlags(board.CONFIG['armingDisableFlags'])))
+    # As you run this script, it will save a file MSPy.log with a very detailed info about all the
+    # things sent and received through the serial port because of the argument loglevel='DEBUG'.
+    with MSPy(device=serial_port, logfilename='MSPy.log', logfilemode='a', loglevel='DEBUG') as board:
+        if board==1:
+            print("An error ocurred... probably the serial port is not available ;)")
+            sys.exit(1)
 
-    if board.reboot():
-        try:
-            dataHandler = board.receive_msg()
-            board.process_recv_data(dataHandler)
-        except serial.SerialException:
-            print("Board is rebooting")
+        #
+        # The commands bellow will list / test all the possible messages implemented here
+        # skipping the ones that SET or try to crazy stuff...
+        for msg in MSPy.MSPCodes.keys():
+            if 'SET' not in msg:
+                if msg not in avoid_list:
+                    if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+                        print('{} >>> requested!'.format(msg))
+                        dataHandler = board.receive_msg()
+                        codestr = MSPy.MSPCodes2Str.get(dataHandler['code'])
+                        if codestr:
+                            print('Received >>> {}'.format(codestr))
+                            board.process_recv_data(dataHandler)
+                        elif dataHandler['packet_error'] == 1:
+                            print('Received >>> ERROR!')
+
+        print("armingDisableFlags: {}".format(board.process_armingDisableFlags(board.CONFIG['armingDisableFlags'])))
+
+        if board.reboot():
+            try:
+                dataHandler = board.receive_msg()
+                board.process_recv_data(dataHandler)
+            except serial.SerialException:
+                print("Board is rebooting")
+
+
+if __name__ == "__main__":
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description='Command line example.')
+    parser.add_argument('--serialport', action='store', default="/dev/serial0", help='serial port')
+    arguments = parser.parse_args()
+
+    example(arguments.serialport)

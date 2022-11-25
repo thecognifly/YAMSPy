@@ -5,7 +5,7 @@ import struct
 from yamspy import MSPy, msp_ctrl
 
 # $ python -m yamspy.msp_proxy --ports 54310 54320 54330 54340
-serial_port = 54360
+# serial_port = 54360
 FC_SEND_LOOP_TIME = 1/10
 
 
@@ -19,46 +19,56 @@ compass_template = {
 }
 
 
-with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
-    command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
-                    'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
-                    'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
-    for msg in command_list:
-        if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-            dataHandler = board.receive_msg()
-            board.process_recv_data(dataHandler)
-    try:
-        mspSensorCompassDataMessage = compass_template.copy()
-        mspSensorCompassDataMessage['instance'] = 1
+if __name__ == '__main__':
+    from argparse import ArgumentParser
 
-        for i in range(50):
-            print("Initial messages ", time.monotonic())
-            print("magX, magY, magZ: ", mspSensorCompassDataMessage['magX'], mspSensorCompassDataMessage['magY'], mspSensorCompassDataMessage['magZ'])
-            compass_data = struct.pack(msp2_compass_format, *mspSensorCompassDataMessage.values())
+    parser = ArgumentParser(description='Command line example.')
+    parser.add_argument('--serialport', action='store', default="/dev/serial0", help='serial port')
+    parser.add_argument('--use-tcp', action='store_true', help='TCP')
+    arguments = parser.parse_args()
+    serial_port = arguments.serialport
+    use_tcp = arguments.use_tcp
 
-            # Send Compass data
-            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_COMPASS'], data=compass_data):
-                print(f"MSP2_SENSOR_COMPASS data {compass_data} sent!")
+    with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=use_tcp, min_time_between_writes=1/30) as board:
+        command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
+                        'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
+                        'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
+        for msg in command_list:
+            if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+                dataHandler = board.receive_msg()
+                board.process_recv_data(dataHandler)
+        try:
+            mspSensorCompassDataMessage = compass_template.copy()
+            mspSensorCompassDataMessage['instance'] = 1
 
-            time.sleep(FC_SEND_LOOP_TIME)
+            for i in range(50):
+                print("Initial messages ", time.monotonic())
+                print("magX, magY, magZ: ", mspSensorCompassDataMessage['magX'], mspSensorCompassDataMessage['magY'], mspSensorCompassDataMessage['magZ'])
+                compass_data = struct.pack(msp2_compass_format, *mspSensorCompassDataMessage.values())
+
+                # Send Compass data
+                if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_COMPASS'], data=compass_data):
+                    print(f"MSP2_SENSOR_COMPASS data {compass_data} sent!")
+
+                time.sleep(FC_SEND_LOOP_TIME)
 
 
-        mspSensorCompassDataMessage['magX'] = 0 #mGauss
-        mspSensorCompassDataMessage['magY'] = 450 #mGauss
-        while True:
-            print(time.monotonic())
-            print("magX, magY, magZ: ", mspSensorCompassDataMessage['magX'], mspSensorCompassDataMessage['magY'], mspSensorCompassDataMessage['magZ'])
-            compass_data = struct.pack(msp2_compass_format, *mspSensorCompassDataMessage.values())
+            mspSensorCompassDataMessage['magX'] = 0 #mGauss
+            mspSensorCompassDataMessage['magY'] = 450 #mGauss
+            while True:
+                print(time.monotonic())
+                print("magX, magY, magZ: ", mspSensorCompassDataMessage['magX'], mspSensorCompassDataMessage['magY'], mspSensorCompassDataMessage['magZ'])
+                compass_data = struct.pack(msp2_compass_format, *mspSensorCompassDataMessage.values())
 
 
-            # Send Compass data
-            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_COMPASS'], data=compass_data):
-                print(f"MSP2_SENSOR_COMPASS data {compass_data} sent!")
+                # Send Compass data
+                if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_COMPASS'], data=compass_data):
+                    print(f"MSP2_SENSOR_COMPASS data {compass_data} sent!")
 
-            time.sleep(FC_SEND_LOOP_TIME)
+                time.sleep(FC_SEND_LOOP_TIME)
 
-    except KeyboardInterrupt:
-        print("stop")
-    finally:
-        pass
-        #board.reboot()
+        except KeyboardInterrupt:
+            print("stop")
+        finally:
+            pass
+            #board.reboot()
