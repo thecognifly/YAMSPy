@@ -1066,7 +1066,7 @@ class MSPy:
         return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
 
 
-    def send_RAW_msg(self, code, data=[], blocking=None, timeout=None, flush=True):
+    def send_RAW_msg(self, code, data=[], blocking=None, timeout=None, flush=False):
         mspv = 1 if code <= 255 else 2
         bufView = msp_ctrl.prepare_RAW_msg(mspv, code, data)
         with self.port_write_lock:
