@@ -319,7 +319,7 @@ def prepare_RAW_msg(mspv, code, data=[]):
         size = len_data + 6
         checksum = 0
 
-        bufView = bytearray([0]*size)
+        bufView = bytearray(size)
 
         bufView[0] = 36 #$
         bufView[1] = 77 #M
@@ -338,7 +338,7 @@ def prepare_RAW_msg(mspv, code, data=[]):
     elif mspv==2: # MSP V2
         size = len_data + 9
         checksum = 0
-        bufView = bytearray([0]*size)
+        bufView = bytearray(size)
         bufView[0] = 36 #$ 
         bufView[1] = 88 #X
         bufView[2] = 60 #<
@@ -347,8 +347,7 @@ def prepare_RAW_msg(mspv, code, data=[]):
         bufView[5] = (code & 0xFF00) >> 8 #code upper byte
         bufView[6] = len_data & 0xFF #len_data lower byte
         bufView[7] = (len_data & 0xFF00) >> 8 #len_data upper byte
-        for di in range(len_data):
-            bufView[8+di] = data[di]
+        bufView[8:8+len_data] = data
         for si in range(3, size-1):
             checksum = _crc8_dvb_s2(checksum, bufView[si])
         bufView[-1] = checksum
