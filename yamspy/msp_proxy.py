@@ -71,18 +71,23 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                         return False
                     return True
 
+                message_number = 0
                 while conn.fileno()>0:
                     sleep(time2sleep)
                     tic = monotonic()
                     # This is a slow operation... but it's needed to know
                     # where a message starts / ends, and it's useful for debugging
+                    message_number += 1
                     pc2fc, raw_bytes = msp_ctrl.receive_msg(receive, logging, output_raw_bytes=True) # from PC
+                    if pc2fc['pending'] == 1:
+                        pc2fc, _raw_bytes = msp_ctrl.receive_msg(receive, logging, pc2fc, output_raw_bytes=True) # from PC
+                        raw_bytes += _raw_bytes
                     if not raw_bytes:
                         break
                     logging.debug(f"[{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
                     logging.debug(f"[{PORT}] {msp_codes.MSPCodes2Str[pc2fc['code']]} message_direction={'FC2PC' if pc2fc['message_direction'] else 'PC2FC'}, payload={len(pc2fc['dataView'])}, packet_error={pc2fc['packet_error']}")
                     if pc2fc['packet_error'] != 0:
-                        logging.error(f"[{PORT}] packet_error receiving from TCP!!!!")
+                        logging.error(f"[{PORT}] packet_error receiving from TCP ({message_number})!!!!")
                     if 'MSP2_SENSOR' in msp_codes.MSPCodes2Str[pc2fc['code']]:
                         pipe.send([PORT,raw_bytes,False]) # to FC (proxy)
                     else:
@@ -145,6 +150,7 @@ def main(ports, device, baudrate, timeout=1/1000):
     serial_test_thread.daemon = True
     serial_test_thread.start()
     
+    message_number = 0
     while path.exists(device):
         pipes,_,_ = select(local_pipes,[],[sconn])
         pipe_local = pipes[0]
@@ -152,23 +158,26 @@ def main(ports, device, baudrate, timeout=1/1000):
         server_thread, _, pipe_thread, HOST = servers[PORT]
         if server_thread.is_alive():
             res = 0
-            while res == 0: # raw_bytes will never be 0 length
+            while res == 0 and len(raw_bytes): # raw_bytes will never be 0 length
                 try:
                     res = sconn.write(raw_bytes) # to FC (serial port)
-                    sconn.flush()
+                    # sconn.flush()
                 except serial.SerialTimeoutException:
                     logging.error(f"[MAIN-{PORT}] RAW message {raw_bytes} was not sent to FC (SerialTimeoutException)!")
-                
-            logging.debug(f"[MAIN-{PORT}] RAW message sent to FC: {raw_bytes}")
+            message_number += 1
+            logging.debug(f"[MAIN-{PORT}] RAW message ({message_number}) sent to FC: {raw_bytes}")
             
             if get_reply:
                 # Check for a response from the FC
                 tic = monotonic()
                 fc2pc, raw_bytes = msp_ctrl.receive_msg(ser_read, logging, output_raw_bytes=True) # from FC (serial port)
+                if fc2pc['pending'] == 1:
+                    fc2pc, _raw_bytes = msp_ctrl.receive_msg(ser_read, logging, fc2pc, output_raw_bytes=True) # from PC
+                    raw_bytes += _raw_bytes
                 logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
                 logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
                 if fc2pc['packet_error'] != 0:
-                    logging.error(f"[MAIN-{PORT}] packet_error receiving from serial port!!!!")
+                    logging.error(f"[MAIN-{PORT}] packet_error receiving from serial port ({msp_codes.MSPCodes2Str[fc2pc['code']]} - {message_number})!!!!")
                 pipe_local.send(raw_bytes) # to PC (TCP)
         else:
             raise RuntimeError(f"Server for {HOST, PORT} died!")
