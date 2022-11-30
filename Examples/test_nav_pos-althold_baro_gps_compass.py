@@ -77,7 +77,7 @@ def update_gps(now):
 
     return gps_data
 
-with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True) as board:
+with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/50) as board:
     command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
                     'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
                     'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
