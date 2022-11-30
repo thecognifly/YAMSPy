@@ -885,12 +885,12 @@ class MSPy:
         with self.port_read_lock:
             return msp_ctrl.receive_raw_msg(self.read, logging, self.timeout_exception, size, timeout)
 
-    def receive_msg(self):
+    def receive_msg(self, dataHandler=None):
         current_write = time.time()
         if (current_write-self.last_write) < self.min_time_between_writes:
             time.sleep(max(self.min_time_between_writes-(current_write-self.last_write),0))
         with self.port_read_lock:
-            return msp_ctrl.receive_msg(self.read, logging)
+            return msp_ctrl.receive_msg(self.read, logging, dataHandler)
 
 
     @staticmethod

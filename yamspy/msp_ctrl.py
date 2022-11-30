@@ -18,6 +18,7 @@ dataHandler_init = {
     'crcError':                   False,
     'packet_error':               0,
     'unsupported':                0,
+    'pending':                    0,
 
     'last_received_timestamp':   None
 }
@@ -70,7 +71,7 @@ def receive_raw_msg(local_read, logging, timeout_exception, size, timeout = 10):
     msg = local_read(size=(size - 1)) # -1 to compensate for the $
     return msg_header + msg
 
-def receive_msg(local_read, logging, output_raw_bytes=False):
+def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False):
     """Receive an MSP message from the serial port
     Based on betaflight-configurator (https://git.io/fjRAz)
 
@@ -80,7 +81,11 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
         dataHandler with the received data pre-parsed
     """
     local_read = _read(local_read)
-    dataHandler = dataHandler_init.copy()
+    if dataHandler is None:
+        dataHandler = dataHandler_init.copy()
+    else:
+        dataHandler['pending'] = 0
+        
     if output_raw_bytes:
         raw_bytes = b''
 
@@ -106,8 +111,8 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
             logging.debug(f"State: {dataHandler['state']} - byte received (at {dataHandler['last_received_timestamp']}): {data}")
         except IndexError:
             logging.debug('IndexError detected on state: {}'.format(dataHandler['state']))
-            di = 0 # reads more data
-            continue
+            dataHandler['pending'] = 1
+            break
 
         # it will always fall in the first state by default
         if dataHandler['state'] == 0: # sync char 1
