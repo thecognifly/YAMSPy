@@ -135,25 +135,27 @@ def keyboard_controller(screen):
             # It's necessary to send some messages or the RX failsafe will be activated
             # and it will not be possible to arm.
             command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
-                            'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
-                            'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
+                            'MSP_BOARD_INFO', 'MSP_UID', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
+                            'MSP_BOXNAMES', 'MSP_ANALOG']
 
             if board.INAV:
                 command_list.append('MSP2_INAV_ANALOG')
                 command_list.append('MSP_VOLTAGE_METER_CONFIG')
                 command_list.append('MSP2_INAV_STATUS')
 
-            for msg in command_list: 
+            for msg in command_list:
+                msg_processed = False
                 code_value = MSPy.MSPCodes[msg]
-                if board.send_RAW_msg(code_value, data=[]):
-                    dataHandler = board.receive_msg()
-                    if dataHandler['pending'] == 1:
-                        dataHandler = board.receive_msg(dataHandler)
-                    board.process_recv_data(dataHandler)
-
-                    if dataHandler['packet_error']==1:
-                        screen.addstr(21, 0, f"Packet error: {MSPy.MSPCodes2Str[dataHandler['code']]} @ {time.asctime()}")
-                        screen.clrtoeol()
+                while not msg_processed:
+                    if board.send_RAW_msg(code_value, data=[]):
+                        dataHandler = board.receive_msg()
+                        if dataHandler['pending'] == 1:
+                            dataHandler = board.receive_msg(dataHandler)                    
+                        if dataHandler['packet_error']==1:
+                            return 1 # if messages are failing here... it's a bad omen :)
+                        board.process_recv_data(dataHandler)
+                        if dataHandler['code'] == MSPy.MSPCodes[msg]:
+                            msg_processed = True
 
             if board.INAV:
                 cellCount = board.BATTERY_STATE['cellCount']
