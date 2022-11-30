@@ -150,6 +150,11 @@ def keyboard_controller(screen):
                     if dataHandler['pending'] == 1:
                         dataHandler = board.receive_msg(dataHandler)
                     board.process_recv_data(dataHandler)
+
+                    if dataHandler['packet_error']==1:
+                        screen.addstr(21, 0, f"Packet error: {MSPy.MSPCodes2Str[dataHandler['code']]} @ {time.asctime()}")
+                        screen.clrtoeol()
+
             if board.INAV:
                 cellCount = board.BATTERY_STATE['cellCount']
             else:
@@ -322,6 +327,9 @@ def keyboard_controller(screen):
 
                     screen.addstr(11, 0, "GUI cycleTime: {0:2.2f}ms (average {1:2.2f}Hz)".format((last_cycleTime)*1000,
                                                                                                 1/(sum(average_cycle)/len(average_cycle))))
+                    screen.clrtoeol()
+
+                    screen.addstr(12, 0, f"{time.asctime()}")
                     screen.clrtoeol()
 
                     screen.addstr(3, 0, cursor_msg)

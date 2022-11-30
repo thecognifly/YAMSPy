@@ -7,7 +7,7 @@ dataHandler_init = {
     'msp_version':                1,
     'state':                      0,
     'message_direction':          -1,
-    'code':                       0,
+    'code':                       -1,
     'dataView':                   [],
     'message_length_expected':    0,
     'message_length_received':    0,
@@ -85,7 +85,7 @@ def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False):
         dataHandler = dataHandler_init.copy()
     else:
         dataHandler['pending'] = 0
-        
+
     if output_raw_bytes:
         raw_bytes = b''
 
@@ -101,6 +101,7 @@ def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False):
                         raw_bytes += received_bytes[di:di+1]
                 else:
                     dataHandler['packet_error'] = 1
+                    dataHandler['code'] = -1
                     break
             else:
                 data = received_bytes[di]
@@ -127,8 +128,9 @@ def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False):
                 dataHandler['msp_version'] = 2
                 dataHandler['state'] = 2
             else: # something went wrong, no M received...
-                logging.debug('Something went wrong, no M received.')
+                logging.debug('Something went wrong, no M or X received.')
                 dataHandler['packet_error'] = 1
+                dataHandler['code'] = -2
                 break # sends it to the error state
 
         elif dataHandler['state'] == 2: # direction (should be >)
@@ -138,6 +140,7 @@ def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False):
                 logging.debug('FC reports unsupported message error.')
                 dataHandler['unsupported'] = 1
                 dataHandler['packet_error'] = 1
+                dataHandler['code'] = -3
                 break # sends it to the error state
             else:
                 if (data == 62): # > FC to PC
