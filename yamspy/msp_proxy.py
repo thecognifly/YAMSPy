@@ -108,7 +108,7 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                 
 
 
-def main(ports, device, baudrate, timeout=1/1000):
+def main(ports, device, baudrate, timeout=1/1000, min_time_between_writes=1/100):
     time2sleep = len(ports)*timeout
     try:
         sconn = serial.Serial(port = device, baudrate = baudrate,
@@ -151,9 +151,15 @@ def main(ports, device, baudrate, timeout=1/1000):
     serial_test_thread.start()
     
     message_number = 0
+    last_write = monotonic()
     while path.exists(device):
         pipes,_,_ = select(local_pipes,[],[sconn])
         pipe_local = pipes[0]
+        current_write = monotonic()
+        if (current_write-last_write) < min_time_between_writes:
+            sleep(max(min_time_between_writes-(current_write-last_write),0))
+            current_write = monotonic()
+        last_write = current_write
         PORT, raw_bytes, get_reply = pipe_local.recv() # from PC
         server_thread, _, pipe_thread, HOST = servers[PORT]
         if server_thread.is_alive():
@@ -208,6 +214,9 @@ if __name__ == '__main__':
                         action='store_true', 
                         help="Debug mode.")
 
+    parser.add_argument('--min_time_between_writes', type=float,  default=1/100,
+                        help='Minimum time between serial writes...')
+
 
     args = parser.parse_args()
 
@@ -221,6 +230,6 @@ if __name__ == '__main__':
                         stream=sys.stdout)
     
     try:
-        main(args.ports, args.serial, args.baudrate, timeout=1/1000)
+        main(args.ports, args.serial, args.baudrate, timeout=1/1000, min_time_between_writes=args.min_time_between_writes)
     except KeyboardInterrupt:
         print("\nBye!")
