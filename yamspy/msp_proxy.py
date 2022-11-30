@@ -50,11 +50,14 @@ def TCPServer(pipe, HOST, PORT, timeout=1/10000, time2sleep=0):
                     try:
                         recvbuffer = conn.recv(buffersize) # read all buffer
                         if not recvbuffer:
+                            logging.warning(f"[{PORT}] Empty recvbuffer!")
                             conn.close() # no data for SOCK_STREAM = dead
                     except ConnectionResetError:
+                        logging.warning(f"[{PORT}] ConnectionResetError!")
                         conn.close() # no data for SOCK_STREAM = dead
                         recvbuffer = b''
                     except socket.timeout:
+                        logging.warning(f"[{PORT}] socket.timeout!")
                         conn.close() # no data for SOCK_STREAM = dead
                         recvbuffer = b''
                     logging.debug(f"[{PORT}] Socket ({addr}) returned recvbuffer {recvbuffer}")
