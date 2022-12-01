@@ -178,7 +178,7 @@ def main(ports, device, baudrate, timeout=1/1000, min_time_between_writes=1/100)
                 tic = monotonic()
                 fc2pc, raw_bytes = msp_ctrl.receive_msg(ser_read, logging, output_raw_bytes=True) # from FC (serial port)
                 if fc2pc['pending'] == 1:
-                    fc2pc, _raw_bytes = msp_ctrl.receive_msg(ser_read, logging, fc2pc, output_raw_bytes=True) # from PC
+                    fc2pc, _raw_bytes = msp_ctrl.receive_msg(ser_read, logging, fc2pc, output_raw_bytes=True) # from FC (rest of the pending message)
                     raw_bytes += _raw_bytes
                 logging.debug(f"[MAIN-{PORT}] msp_ctrl.receive_msg time: {1000*(monotonic()-tic)}ms")
                 logging.debug(f"[MAIN-{PORT}] {msp_codes.MSPCodes2Str[fc2pc['code']]} message_direction={'FC2PC' if fc2pc['message_direction'] else 'PC2FC'}, payload={len(fc2pc['dataView'])}, packet_error={fc2pc['packet_error']}")
