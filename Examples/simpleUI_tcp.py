@@ -281,7 +281,9 @@ def keyboard_controller(screen):
                                 dataHandler = board.receive_msg(dataHandler)
                             if dataHandler['code'] == MSPy.MSPCodes[next_msg]:
                                 msg_processed = True
-                        board.process_recv_data(dataHandler)
+                                board.process_recv_data(dataHandler)
+                            if dataHandler['packet_error']==1:
+                                msg_processed = True
                         screen.addstr(20, 0, MSPy.MSPCodes2Str[dataHandler['code']])
                         screen.clrtoeol()
                     else:
