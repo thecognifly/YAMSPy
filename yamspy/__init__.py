@@ -886,6 +886,8 @@ class MSPy:
         with self.port_read_lock:
             return msp_ctrl.receive_msg(self.read, logging, dataHandler, delete_buffer)
 
+    def read_buffer_len(self):
+        return len(msp_ctrl.read_buffer)
 
     @staticmethod
     def readbytes(data, size=8, unsigned=False, read_as_float=False):
