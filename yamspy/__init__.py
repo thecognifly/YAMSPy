@@ -882,9 +882,9 @@ class MSPy:
         with self.port_read_lock:
             return msp_ctrl.receive_raw_msg(self.read, logging, self.timeout_exception, size, timeout)
 
-    def receive_msg(self, dataHandler=None):
+    def receive_msg(self, dataHandler=None, delete_buffer=False):
         with self.port_read_lock:
-            return msp_ctrl.receive_msg(self.read, logging, dataHandler)
+            return msp_ctrl.receive_msg(self.read, logging, dataHandler, delete_buffer)
 
 
     @staticmethod

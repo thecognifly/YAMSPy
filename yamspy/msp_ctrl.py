@@ -71,7 +71,7 @@ def receive_raw_msg(local_read, logging, timeout_exception, size, timeout = 10):
     msg = local_read(size=(size - 1)) # -1 to compensate for the $
     return msg_header + msg
 
-def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False):
+def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False, delete_buffer=False):
     """Receive an MSP message from the serial port
     Based on betaflight-configurator (https://git.io/fjRAz)
 
@@ -93,7 +93,10 @@ def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False):
     while True:
         try:
             if di == 0:
-                received_bytes = memoryview(local_read()) # it will read everything from the buffer
+                if delete_buffer:
+                    received_bytes = memoryview(local_read(buffer=b'')) # it will 'freash' read everything
+                else:
+                    received_bytes = memoryview(local_read()) # it will read everything from the buffer
                 if received_bytes:
                     dataHandler['last_received_timestamp'] = time.time()
                     data = received_bytes[di]
