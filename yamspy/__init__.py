@@ -745,7 +745,7 @@ class MSPy:
             self.INAV = True
 
         basic_info_cmd_list = ['MSP_FC_VERSION', 'MSP_BUILD_INFO', 'MSP_BOARD_INFO', 'MSP_UID', 
-                               'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX', 'MSP_ANALOG']
+                               'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX', 'MSP_ANALOG', 'MSP_BOXNAMES']
         if self.INAV:
             basic_info_cmd_list.append('MSP2_INAV_ANALOG')
             basic_info_cmd_list.append('MSP_VOLTAGE_METER_CONFIG')

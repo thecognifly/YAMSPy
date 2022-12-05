@@ -134,9 +134,7 @@ def keyboard_controller(screen):
 
             # It's necessary to send some messages or the RX failsafe will be activated
             # and it will not be possible to arm.
-            command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
-                            'MSP_BOARD_INFO', 'MSP_UID', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
-                            'MSP_BOXNAMES', 'MSP_ANALOG']
+            command_list = []
 
             if board.INAV:
                 command_list.append('MSP2_INAV_ANALOG')
