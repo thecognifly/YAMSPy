@@ -66,6 +66,17 @@ compass_template = {
 }
 
 
+msp2_imu_format = '<hhhhhh' # https://docs.python.org/3/library/struct.html#format-characters
+imu_template = {
+             'accX': 0,          # int16_t - (float*1000) G's
+             'accY': 0,          # int16_t - (float*1000) G's
+             'accZ': 0,          # int16_t - (float*1000) G's
+             'gyroX': 0,         # int16_t - (float*1000) deg/s
+             'gyroY': 0,         # int16_t - (float*1000) deg/s
+             'gyroZ': 0          # int16_t - (float*1000) deg/s
+}
+
+
 def update_gps(now):
     mspSensorGpsDataMessage['year'] = now.year
     mspSensorGpsDataMessage['month'] = now.month
@@ -78,13 +89,30 @@ def update_gps(now):
     return gps_data
 
 with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/50) as board:
-    command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO',
-                    'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS',
-                    'MSP_STATUS_EX','MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES']
+    # It's necessary to send some messages or the RX failsafe will be activated
+    # and it will not be possible to arm.
+    command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
+                    'MSP_BOARD_INFO', 'MSP_UID', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
+                    'MSP_BOXNAMES', 'MSP_ANALOG']
+
+    if board.INAV:
+        command_list.append('MSP2_INAV_ANALOG')
+        command_list.append('MSP_VOLTAGE_METER_CONFIG')
+        command_list.append('MSP2_INAV_STATUS')
+
     for msg in command_list:
-        if board.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
-            dataHandler = board.receive_msg()
-            board.process_recv_data(dataHandler)
+        msg_processed = False
+        code_value = MSPy.MSPCodes[msg]
+        while not msg_processed:
+            if board.send_RAW_msg(code_value, data=[]):
+                dataHandler = board.receive_msg()
+                if dataHandler['pending'] == 1:
+                    dataHandler = board.receive_msg(dataHandler)                    
+                if dataHandler['packet_error']==1:
+                    msg_processed = True
+                board.process_recv_data(dataHandler)
+                if dataHandler['code'] == MSPy.MSPCodes[msg]:
+                    msg_processed = True
     try:
         #
         # GPS
@@ -139,6 +167,15 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True,
         mspSensorCompassDataMessage['magZ'] = int((-284E-6)*10E6) #mGauss
         compass_data = struct.pack(msp2_compass_format, *mspSensorCompassDataMessage.values())
 
+        mspSensorImuDataMessage = imu_template.copy()
+        mspSensorImuDataMessage['accX'] = int(0)
+        mspSensorImuDataMessage['accY'] = int(0)
+        mspSensorImuDataMessage['accZ'] = int(1000)
+        mspSensorImuDataMessage['gyroX'] = int(0)
+        mspSensorImuDataMessage['gyroY'] = int(0)
+        mspSensorImuDataMessage['gyroZ'] = int(0)
+        imu_data = struct.pack(msp2_imu_format, *mspSensorImuDataMessage.values())
+
         # Send some messages to initialize / calibrate the barometer
         for i in range(50):
             print("Initial messages ", time.monotonic())
@@ -156,6 +193,10 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True,
             # Send Compass data
             if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_COMPASS'], data=compass_data):
                 print(f"MSP2_SENSOR_COMPASS data {compass_data} sent!")
+
+            # Send IMU data
+            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_IMU'], data=imu_data):
+                print(f"MSP2_SENSOR_IMU data {imu_data} sent!")
 
             time.sleep(FC_SEND_LOOP_TIME)
 
@@ -179,6 +220,10 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True,
             # Send Compass data
             if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_COMPASS'], data=compass_data):
                 print(f"MSP2_SENSOR_COMPASS data {compass_data} sent!")
+
+            # Send IMU data
+            if board.send_RAW_msg(MSPy.MSPCodes['MSP2_SENSOR_IMU'], data=imu_data):
+                print(f"MSP2_SENSOR_IMU data {imu_data} sent!")
 
             count += 1
             time.sleep(FC_SEND_LOOP_TIME)

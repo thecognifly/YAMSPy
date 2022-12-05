@@ -125,7 +125,7 @@ def keyboard_controller(screen):
     try:
         screen.addstr(15, 0, "Connecting to the FC...")
 
-        with MSPy(device=SERIAL_PORT, baudrate=115200, use_tcp=True, min_time_between_writes=1/30) as board:
+        with MSPy(device=SERIAL_PORT, baudrate=115200, use_tcp=True, min_time_between_writes=1/50) as board:
             if board == 1: # an error occurred...
                 return 1
 
@@ -138,19 +138,27 @@ def keyboard_controller(screen):
             # It's necessary to send some messages or the RX failsafe will be activated
             # and it will not be possible to arm.
             command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
-                            'MSP_BOARD_INFO', 'MSP_UID', 'MSP_ACC_TRIM', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
-                            'MSP_BATTERY_CONFIG', 'MSP_BATTERY_STATE', 'MSP_BOXNAMES', 'MSP_ANALOG']
+                            'MSP_BOARD_INFO', 'MSP_UID', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
+                            'MSP_BOXNAMES', 'MSP_ANALOG']
 
             if board.INAV:
                 command_list.append('MSP2_INAV_ANALOG')
                 command_list.append('MSP_VOLTAGE_METER_CONFIG')
                 command_list.append('MSP2_INAV_STATUS')
 
-            for msg in command_list: 
+            for msg in command_list:
+                msg_processed = False
                 code_value = MSPy.MSPCodes[msg]
-                if board.send_RAW_msg(code_value, data=[]):
-                    dataHandler = board.receive_msg()
-                    board.process_recv_data(dataHandler)
+                while not msg_processed:
+                    if board.send_RAW_msg(code_value, data=[]):
+                        dataHandler = board.receive_msg()
+                        if dataHandler['pending'] == 1:
+                            dataHandler = board.receive_msg(dataHandler)                    
+                        if dataHandler['packet_error']==1:
+                            return 1 # if messages are failing here... it's a bad omen :)
+                        board.process_recv_data(dataHandler)
+                        if dataHandler['code'] == MSPy.MSPCodes[msg]:
+                            msg_processed = True
 
             if board.INAV:
                 cellCount = board.BATTERY_STATE['cellCount']
@@ -254,9 +262,7 @@ def keyboard_controller(screen):
                     last_loop_time = time.time()
                     CMDS['counter'] = int(last_loop_time)
                     # Send the RC channel values to the FC
-                    if board.send_RAW_RC([CMDS[ki] for ki in CMDS_ORDER]):
-                        dataHandler = board.receive_msg()
-                        board.process_recv_data(dataHandler)
+                    board.send_RAW_RC([CMDS[ki] for ki in CMDS_ORDER])
 
                 #
                 # SLOW MSG processing (user GUI)
@@ -268,10 +274,23 @@ def keyboard_controller(screen):
 
                     # Read info from the FC
                     if board.send_RAW_msg(MSPy.MSPCodes[next_msg], data=[]):
-                        dataHandler = board.receive_msg()
-                        board.process_recv_data(dataHandler)
+                        msg_processed = False
+                        while not msg_processed:
+                            dataHandler = board.receive_msg()
+                            if dataHandler['pending'] == 1:
+                                dataHandler = board.receive_msg(dataHandler)
+                            if dataHandler['code'] == MSPy.MSPCodes[next_msg]:
+                                msg_processed = True
+                                board.process_recv_data(dataHandler)
+                            if dataHandler['packet_error']==1:
+                                msg_processed = True
+                        screen.addstr(20, 0, MSPy.MSPCodes2Str[dataHandler['code']])
+                        screen.clrtoeol()
                     else:
                         next_msg = ''
+                        screen.addstr(20, 0, "None")
+                        screen.clrtoeol()
+                         
                         
                     if next_msg == 'MSP_ANALOG':
                         voltage = board.ANALOG['voltage']
@@ -318,6 +337,9 @@ def keyboard_controller(screen):
                         screen.clrtoeol()
 
                     screen.addstr(11, 0, f"GUI cycleTime: {last_cycleTime*1000:2.2f}ms (average {1/(sum(average_cycle)/len(average_cycle)):2.2f}Hz)")
+                    screen.clrtoeol()
+
+                    screen.addstr(12, 0, f"{time.asctime()}")
                     screen.clrtoeol()
 
                     screen.addstr(3, 0, cursor_msg)

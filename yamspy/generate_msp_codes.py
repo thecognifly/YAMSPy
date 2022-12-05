@@ -27,6 +27,9 @@ for l in data_bf:
 
 with open('msp_codes.py','w') as f:
     f.write("MSPCodes = {\n")
+    f.write("\'UNSUPPORTED_MSG_RECEIVED\': -3,")
+    f.write("\'NO_MSP_VERSION_RECEIVED\': -2,")
+    f.write("\'NO_BYTES_RECEIVED\': -1,")
     for code in codes:
         f.write(f"\'{code}\': {codes[code]},\n")
 

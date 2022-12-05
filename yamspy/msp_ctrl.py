@@ -7,7 +7,7 @@ dataHandler_init = {
     'msp_version':                1,
     'state':                      0,
     'message_direction':          -1,
-    'code':                       0,
+    'code':                       -1,
     'dataView':                   [],
     'message_length_expected':    0,
     'message_length_received':    0,
@@ -18,6 +18,7 @@ dataHandler_init = {
     'crcError':                   False,
     'packet_error':               0,
     'unsupported':                0,
+    'pending':                    0,
 
     'last_received_timestamp':   None
 }
@@ -49,28 +50,8 @@ def _read(local_read):
         return output
     return read
 
-def receive_raw_msg(local_read, logging, timeout_exception, size, timeout = 10):
-    """Receive multiple bytes at once when it's not a jumbo frame.
-    Returns
-    -------
-    bytes
-        data received
-    """
-    local_read = _read(local_read)
-    msg_header = b''
-    timeout = time.time() + timeout
-    while True:
-        if time.time() >= timeout:
-            logging.warning("Timeout occured when receiving a message")
-            raise timeout_exception("receive_raw_msg timeout")
-        msg_header = local_read(size=1)
-        if msg_header:
-            if ord(msg_header) == 36: # $
-                break
-    msg = local_read(size=(size - 1)) # -1 to compensate for the $
-    return msg_header + msg
 
-def receive_msg(local_read, logging, output_raw_bytes=False):
+def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False, delete_buffer=False):
     """Receive an MSP message from the serial port
     Based on betaflight-configurator (https://git.io/fjRAz)
 
@@ -80,7 +61,11 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
         dataHandler with the received data pre-parsed
     """
     local_read = _read(local_read)
-    dataHandler = dataHandler_init.copy()
+    if dataHandler is None:
+        dataHandler = dataHandler_init.copy()
+    else:
+        dataHandler['pending'] = 0
+
     if output_raw_bytes:
         raw_bytes = b''
 
@@ -88,7 +73,10 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
     while True:
         try:
             if di == 0:
-                received_bytes = memoryview(local_read()) # it will read everything from the buffer
+                if delete_buffer:
+                    received_bytes = memoryview(local_read(buffer=b'')) # it will 'freash' read everything
+                else:
+                    received_bytes = memoryview(local_read()) # it will read everything from the buffer
                 if received_bytes:
                     dataHandler['last_received_timestamp'] = time.time()
                     data = received_bytes[di]
@@ -96,6 +84,7 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                         raw_bytes += received_bytes[di:di+1]
                 else:
                     dataHandler['packet_error'] = 1
+                    dataHandler['code'] = -1
                     break
             else:
                 data = received_bytes[di]
@@ -106,8 +95,8 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
             logging.debug(f"State: {dataHandler['state']} - byte received (at {dataHandler['last_received_timestamp']}): {data}")
         except IndexError:
             logging.debug('IndexError detected on state: {}'.format(dataHandler['state']))
-            di = 0 # reads more data
-            continue
+            dataHandler['pending'] = 1
+            break
 
         # it will always fall in the first state by default
         if dataHandler['state'] == 0: # sync char 1
@@ -122,8 +111,9 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                 dataHandler['msp_version'] = 2
                 dataHandler['state'] = 2
             else: # something went wrong, no M received...
-                logging.debug('Something went wrong, no M received.')
+                logging.debug('Something went wrong, no M or X received.')
                 dataHandler['packet_error'] = 1
+                dataHandler['code'] = -2
                 break # sends it to the error state
 
         elif dataHandler['state'] == 2: # direction (should be >)
@@ -133,6 +123,7 @@ def receive_msg(local_read, logging, output_raw_bytes=False):
                 logging.debug('FC reports unsupported message error.')
                 dataHandler['unsupported'] = 1
                 dataHandler['packet_error'] = 1
+                dataHandler['code'] = -3
                 break # sends it to the error state
             else:
                 if (data == 62): # > FC to PC
