@@ -50,26 +50,6 @@ def _read(local_read):
         return output
     return read
 
-def receive_raw_msg(local_read, logging, timeout_exception, size, timeout = 10):
-    """Receive multiple bytes at once when it's not a jumbo frame.
-    Returns
-    -------
-    bytes
-        data received
-    """
-    local_read = _read(local_read)
-    msg_header = b''
-    timeout = time.time() + timeout
-    while True:
-        if time.time() >= timeout:
-            logging.warning("Timeout occured when receiving a message")
-            raise timeout_exception("receive_raw_msg timeout")
-        msg_header = local_read(size=1)
-        if msg_header:
-            if ord(msg_header) == 36: # $
-                break
-    msg = local_read(size=(size - 1)) # -1 to compensate for the $
-    return msg_header + msg
 
 def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False, delete_buffer=False):
     """Receive an MSP message from the serial port
