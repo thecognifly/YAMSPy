@@ -66,14 +66,20 @@ compass_template = {
 }
 
 
-msp2_imu_format = '<hhhhhh' # https://docs.python.org/3/library/struct.html#format-characters
+msp2_imu_format = '<hhhhhhBhhh' # https://docs.python.org/3/library/struct.html#format-characters
+
+HITL_USE_IMU = (1 << 3) # ignore roll, pitch and yaw
 imu_template = {
              'accX': 0,          # int16_t - (float*1000) G's
              'accY': 0,          # int16_t - (float*1000) G's
              'accZ': 0,          # int16_t - (float*1000) G's
              'gyroX': 0,         # int16_t - (float*1000) deg/s
              'gyroY': 0,         # int16_t - (float*1000) deg/s
-             'gyroZ': 0          # int16_t - (float*1000) deg/s
+             'gyroZ': 0,         # int16_t - (float*1000) deg/s
+             'flags': 0,         # int8_t
+             'roll':  0,         # int16_t - (float*1000) deg*10
+             'pitch': 0,         # int16_t - (float*1000) deg*10
+             'yaw':   0,         # int16_t - (float*1000) deg*10
 }
 
 
@@ -91,28 +97,7 @@ def update_gps(now):
 with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True, min_time_between_writes=1/50) as board:
     # It's necessary to send some messages or the RX failsafe will be activated
     # and it will not be possible to arm.
-    command_list = ['MSP_API_VERSION', 'MSP_FC_VARIANT', 'MSP_FC_VERSION', 'MSP_BUILD_INFO', 
-                    'MSP_BOARD_INFO', 'MSP_UID', 'MSP_NAME', 'MSP_STATUS', 'MSP_STATUS_EX',
-                    'MSP_BOXNAMES', 'MSP_ANALOG']
-
-    if board.INAV:
-        command_list.append('MSP2_INAV_ANALOG')
-        command_list.append('MSP_VOLTAGE_METER_CONFIG')
-        command_list.append('MSP2_INAV_STATUS')
-
-    for msg in command_list:
-        msg_processed = False
-        code_value = MSPy.MSPCodes[msg]
-        while not msg_processed:
-            if board.send_RAW_msg(code_value, data=[]):
-                dataHandler = board.receive_msg()
-                if dataHandler['pending'] == 1:
-                    dataHandler = board.receive_msg(dataHandler)                    
-                if dataHandler['packet_error']==1:
-                    msg_processed = True
-                board.process_recv_data(dataHandler)
-                if dataHandler['code'] == MSPy.MSPCodes[msg]:
-                    msg_processed = True
+    
     try:
         #
         # GPS
@@ -174,6 +159,7 @@ with MSPy(device=serial_port, loglevel='WARNING', baudrate=115200, use_tcp=True,
         mspSensorImuDataMessage['gyroX'] = int(0)
         mspSensorImuDataMessage['gyroY'] = int(0)
         mspSensorImuDataMessage['gyroZ'] = int(0)
+        mspSensorImuDataMessage['flags'] = HITL_USE_IMU
         imu_data = struct.pack(msp2_imu_format, *mspSensorImuDataMessage.values())
 
         # Send some messages to initialize / calibrate the barometer
