@@ -260,6 +260,7 @@ def keyboard_controller(screen):
                 #
                 # SLOW MSG processing (user GUI)
                 #
+                msgs_until_correct = 0
                 if (time.time()-last_slow_msg_time) >= SLOW_MSGS_LOOP_TIME:
                     last_slow_msg_time = time.time()
 
@@ -277,7 +278,11 @@ def keyboard_controller(screen):
                                 board.process_recv_data(dataHandler)
                             if dataHandler['packet_error']==1:
                                 msg_processed = True
+                            msgs_until_correct +=1
                         screen.addstr(20, 0, MSPy.MSPCodes2Str[dataHandler['code']])
+                        screen.clrtoeol()
+
+                        screen.addstr(21, 0, f"{msgs_until_correct} trials - packet_error: {next_msg if dataHandler['packet_error']==1 else None}")
                         screen.clrtoeol()
                     else:
                         next_msg = ''
@@ -327,8 +332,7 @@ def keyboard_controller(screen):
                         screen.addstr(10, 0, "RC Channels Values: {}".format(board.RC['channels']))
                         screen.clrtoeol()
 
-                    screen.addstr(11, 0, "GUI cycleTime: {0:2.2f}ms (average {1:2.2f}Hz)".format((last_cycleTime)*1000,
-                                                                                                1/(sum(average_cycle)/len(average_cycle))))
+                    screen.addstr(11, 0, f"GUI cycleTime: {last_cycleTime*1000:2.2f}ms (average {1/(sum(average_cycle)/len(average_cycle)):2.2f}Hz) - read_buffer_len: {board.read_buffer_len()}")
                     screen.clrtoeol()
 
                     screen.addstr(12, 0, f"{time.asctime()}")
