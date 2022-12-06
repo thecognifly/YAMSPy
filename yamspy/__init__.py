@@ -949,11 +949,14 @@ class MSPy:
             if (current_write-self.last_write) < self.min_time_between_writes:
                 time.sleep(max(self.min_time_between_writes-(current_write-self.last_write),0))
                 current_write = time.time()
-            res = self.write(bufView)
-            if flush:
-                self.flush()
-            self.last_write = current_write
-            logging.debug("RAW message sent: {}".format(bufView))
+            try:
+                res = self.write(bufView)
+                if flush:
+                    self.flush()
+                self.last_write = current_write
+                logging.debug("RAW message sent: {}".format(bufView))
+            except self.timeout_exception:
+                logging.debug("RAW message write timeout: {}".format(bufView))
             return res
 
 
