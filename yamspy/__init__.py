@@ -753,12 +753,19 @@ class MSPy:
             basic_info_cmd_list.append('MSP2_INAV_STATUS')
 
         for msg in basic_info_cmd_list:
-            sent = 0
-            while sent<=0:
-                sent = self.send_RAW_msg(MSPy.MSPCodes[msg], data=[])
-            dataHandler = self.receive_msg()
-            self.process_recv_data(dataHandler)
-    
+            msg_processed = False
+            code_value = MSPy.MSPCodes[msg]
+            while not msg_processed:
+                if self.send_RAW_msg(code_value, data=[]):
+                    dataHandler = self.receive_msg()
+                    if dataHandler['pending'] == 1:
+                        dataHandler = self.receive_msg(dataHandler)                    
+                    if dataHandler['packet_error']==1:
+                        return 1 # if messages are failing here... it's a bad omen :)
+                    self.process_recv_data(dataHandler)
+                    if dataHandler['code'] == code_value:
+                        msg_processed = True
+
         print(self.CONFIG)
 
     def receive_msg(self, dataHandler=None, delete_buffer=False):
