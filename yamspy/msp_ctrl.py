@@ -26,28 +26,18 @@ dataHandler_init = {
 
 read_buffer = b''
 def _read(local_read):
-    def read(size=None, buffer=None):
+    def read(buffer=None):
         global read_buffer
         if buffer:
             read_buffer = buffer
-            return
-            
-        output = b''
-        if size:
-            while True:
-                output += read_buffer[:size]
-                read_buffer = read_buffer[size:]
-                size -= len(output)
-                if size > 0:
-                    read_buffer += local_read() # read (try) everything in the serial/socket buffer
-                else:
-                    break
+
+        if len(read_buffer)==0:
+            return local_read() # read (try) everything in the serial/socket buffer
         else:
-            if len(read_buffer)==0:
-                read_buffer += local_read() # read (try) everything in the serial/socket buffer
-            output += read_buffer
+            output = b'' + read_buffer
             read_buffer = b''
-        return output
+            return output
+
     return read
 
 
@@ -74,7 +64,7 @@ def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False, d
         try:
             if di == 0:
                 if delete_buffer:
-                    received_bytes = memoryview(local_read(buffer=b'')) # it will 'freash' read everything
+                    received_bytes = memoryview(local_read(buffer=b'')) # it will 'fresh' read everything
                 else:
                     received_bytes = memoryview(local_read()) # it will read everything from the buffer
                 if received_bytes:
@@ -271,7 +261,7 @@ def receive_msg(local_read, logging, dataHandler=None, output_raw_bytes=False, d
         logging.debug('Error detected on state: {}'.format(dataHandler['state']))
     
     if len(received_bytes[di:]):
-        local_read(buffer=bytes(received_bytes[di:])) # regurgitates unread stuff :)
+        local_read(buffer=received_bytes[di:]) # regurgitates unread stuff :)
 
     if output_raw_bytes:
         return dataHandler, raw_bytes
