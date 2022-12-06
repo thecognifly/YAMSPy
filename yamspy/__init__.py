@@ -642,7 +642,8 @@ class MSPy:
             self.timeout_exception = serial.SerialTimeoutException
 
             def ser_read():
-                _,_,_ = select([self.conn],[],[])  # wait for data
+                _,_,_ = select([self.conn],[],[],timeout*10)  # wait for data because
+                                                              # self.conn.in_waiting returns zero too often...
                 data = self.conn.read(self.conn.in_waiting) # blocking
                 return data
             self.read = ser_read
