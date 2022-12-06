@@ -949,6 +949,7 @@ class MSPy:
             if (current_write-self.last_write) < self.min_time_between_writes:
                 time.sleep(max(self.min_time_between_writes-(current_write-self.last_write),0))
                 current_write = time.time()
+            res = 0
             try:
                 res = self.write(bufView)
                 if flush:
