@@ -820,14 +820,32 @@ class MSPy:
             1: "PREVENT_ARMING",
             2: "ARMED",
             3: "WAS_EVER_ARMED",
+            4: "SIMULATOR_MODE_HITL",
+            5: "SIMULATOR_MODE_SITL",
+            7: "BLOCKED_FAILSAFE_SYSTEM",
             8: "BLOCKED_UAV_NOT_LEVEL",
             9: "BLOCKED_SENSORS_CALIBRATING",
             10: "BLOCKED_SYSTEM_OVERLOADED",
             11: "BLOCKED_NAVIGATION_SAFETY",
             12: "BLOCKED_COMPASS_NOT_CALIBRATED",
             13: "BLOCKED_ACCELEROMETER_NOT_CALIBRATED",
+            14: "BLOCKED_ARM_SWITCH"
             15: "BLOCKED_HARDWARE_FAILURE",
+            16: "BLOCKED_BOXFAILSAFE",
+            17: "BLOCKED_BOXKILLSWITCH",
+            18: "BLOCKED_RC_LINK",
+            19: "BLOCKED_THROTTLE",
+            20: "BLOCKED_CLI",
+            21: "BLOCKED_CMS_MENU",
+            22: "BLOCKED_OSD_MENU",
+            23: "BLOCKED_ROLLPITCH_NOT_CENTERED",
+            24: "BLOCKED_SERVO_AUTOTRIM",
+            25: "BLOCKED_OOM",
             26: "BLOCKED_INVALID_SETTING"
+            27: "BLOCKED_PWM_OUTPUT_ERROR",
+            28: "BLOCKED_NO_PREARM",
+            29: "BLOCKED_DSHOT_BEEPER",
+            30: "BLOCKED_LANDING_DETECTED"
             }
 
         if logfilename:
