@@ -1571,7 +1571,7 @@ class MSPy:
                 if processor: # if nothing is found, should be None
                     try:
                         if data:
-                            processor(self,data) # use it..
+                            processor(data) # use it..
                             return len(data)
                         else:
                             return 0 # because a valid message may contain no data...
