@@ -926,7 +926,7 @@ class MSPy:
         """Basic info about the flight controller to distinguish between the many flavours.
         """
         for msg in ['MSP_API_VERSION', 'MSP_FC_VARIANT']:
-            if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+            if self.send_RAW_msg(self.MSPCodes[msg], data=[]):
                 dataHandler = self.receive_msg()
                 self.process_recv_data(dataHandler)
 
@@ -942,7 +942,7 @@ class MSPy:
             basic_info_cmd_list.append('MSP_VOLTAGE_METER_CONFIG')
 
         for msg in basic_info_cmd_list:
-            if self.send_RAW_msg(MSPy.MSPCodes[msg], data=[]):
+            if self.send_RAW_msg(self.MSPCodes[msg], data=[]):
                 dataHandler = self.receive_msg()
                 self.process_recv_data(dataHandler)
     
@@ -950,7 +950,7 @@ class MSPy:
 
     def fast_read_altitude(self):
         # Request altitude
-        if self.send_RAW_msg(MSPy.MSPCodes['MSP_ALTITUDE']):
+        if self.send_RAW_msg(self.MSPCodes['MSP_ALTITUDE']):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
             data_length = 4
@@ -963,7 +963,7 @@ class MSPy:
         """
 
         # Request IMU values
-        if self.send_RAW_msg(MSPy.MSPCodes['MSP_RAW_IMU']):
+        if self.send_RAW_msg(self.MSPCodes['MSP_RAW_IMU']):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
             # data_length: 9 x 2 = 18 bytes
@@ -995,7 +995,7 @@ class MSPy:
         """
 
         # Request ATTITUDE values
-        if self.send_RAW_msg(MSPy.MSPCodes['MSP_ATTITUDE']):
+        if self.send_RAW_msg(self.MSPCodes['MSP_ATTITUDE']):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
             # data_length: 3 x 2 = 6 bytes
@@ -1013,7 +1013,7 @@ class MSPy:
         """
 
         # Request ANALOG values
-        if self.send_RAW_msg(MSPy.MSPCodes['MSP_ANALOG']):
+        if self.send_RAW_msg(self.MSPCodes['MSP_ANALOG']):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
             if not self.INAV:
@@ -1048,7 +1048,7 @@ class MSPy:
         """
         cmds = [int(cmd) for cmd in cmds]
         data = struct.pack('<%dH' % len(cmds), *cmds)
-        if self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data):
+        if self.send_RAW_msg(self.MSPCodes['MSP_SET_RAW_RC'], data):
             # $ + M + < + data_length + msg_code + data + msg_crc
             # 6 bytes + data_length
 
@@ -1160,7 +1160,7 @@ class MSPy:
 
                 elif dataHandler['state'] == 3:
                     dataHandler['message_length_expected'] = data # 4th byte
-                    if dataHandler['message_length_expected'] == MSPy.JUMBO_FRAME_SIZE_LIMIT:
+                    if dataHandler['message_length_expected'] == self.JUMBO_FRAME_SIZE_LIMIT:
                         logging.debug("JumboFrame received.")
                         dataHandler['messageIsJumboFrame'] = True
 
@@ -1396,12 +1396,12 @@ class MSPy:
 
     def save2eprom(self):
         logging.info("Save to EPROM requested") # some configs also need reboot to be applied (not online).
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_EEPROM_WRITE'], data=[])
+        return self.send_RAW_msg(self.MSPCodes['MSP_EEPROM_WRITE'], data=[])
 
 
     def reboot(self):
         logging.info("Reboot requested")
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_REBOOT'], data=[])
+        return self.send_RAW_msg(self.MSPCodes['MSP_SET_REBOOT'], data=[])
 
 
     def set_ARMING_DISABLE(self, armingDisabled=0, runawayTakeoffPreventionDisabled=0):
@@ -1411,21 +1411,21 @@ class MSPy:
         https://github.com/betaflight/betaflight/wiki/Runaway-Takeoff-Prevention
         """
         data = bytearray([armingDisabled, runawayTakeoffPreventionDisabled])
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_ARMING_DISABLE'], data)
+        return self.send_RAW_msg(self.MSPCodes['MSP_ARMING_DISABLE'], data)
 
 
     def set_RX_MAP(self, new_rc_map):
         assert(type(new_rc_map)==list)
         assert(len(new_rc_map)==8)
 
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RX_MAP'], new_rc_map)
+        return self.send_RAW_msg(self.MSPCodes['MSP_SET_RX_MAP'], new_rc_map)
 
 
     def set_FEATURE_CONFIG(self, mask):
         assert(type(mask)==int)
 
         data = self.convert([mask], 32)
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_FEATURE_CONFIG'], data)
+        return self.send_RAW_msg(self.MSPCodes['MSP_SET_FEATURE_CONFIG'], data)
 
 
     def send_RAW_MOTORS(self, data=[]):
@@ -1435,7 +1435,7 @@ class MSPy:
         data = self.convert(data, 16) # any values bigger than 255 need to be converted.
                                       # RC and Motor commands go from 0 to 2000.
 
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_MOTOR'], data)
+        return self.send_RAW_msg(self.MSPCodes['MSP_SET_MOTOR'], data)
 
 
     def send_RAW_RC(self, data=[]):
@@ -1451,7 +1451,7 @@ class MSPy:
         data = self.convert(data, 16) # any values bigger than 255 need to be converted.
                                       # RC and Motor commands go from 0 to 2000.
 
-        return self.send_RAW_msg(MSPy.MSPCodes['MSP_SET_RAW_RC'], data)
+        return self.send_RAW_msg(self.MSPCodes['MSP_SET_RAW_RC'], data)
 
 
     def send_RAW_msg(self, code, data=[], blocking=True, timeout=-1):
@@ -1566,7 +1566,7 @@ class MSPy:
             return -3
         else:
             if (not dataHandler['unsupported']):
-                processor = MSPy.__dict__.get("process_" + MSPy.MSPCodes2Str[code])
+                processor = self.__dict__.get("process_" + self.MSPCodes2Str[code])
                 if processor: # if nothing is found, should be None
                     try:
                         if data:
@@ -2205,7 +2205,7 @@ class MSPy:
             for i in range(length):
                 self.CONFIG['manufacturerId'] += chr(self.readbytes(data, size=8, unsigned=True))
 
-            for i in range(MSPy.SIGNATURE_LENGTH):
+            for i in range(self.SIGNATURE_LENGTH):
                 self.CONFIG['signature'].append(self.readbytes(data, size=8, unsigned=True))
 
             self.CONFIG['mcuTypeId'] = self.readbytes(data, size=8, unsigned=True)
