@@ -145,6 +145,15 @@ class MSPy:
 
         self.MOTOR_DATA = [0]*8
 
+        self.MOTOR_TELEMETRY_DATA = {
+            'rpm': [0]*8,
+            'invalidPercent': [0]*8,
+            'temperature': [0]*8,
+            'voltage': [0]*8,
+            'current': [0]*8,
+            'consumption': [0]*8,
+        }
+
         # defaults
         # roll, pitch, yaw, throttle, aux 1, ... aux n
         self.RC = {
@@ -1072,6 +1081,16 @@ class MSPy:
     def process_MSP_MOTOR(self, data):
         motorCount = int(len(data) / 2)
         self.MOTOR_DATA = [self.readbytes(data, size=16, unsigned=True) for i in range(motorCount)]
+
+    def process_MSP_MOTOR_TELEMETRY(self, data):
+        motorCount = self.readbytes(data, size=8, unsigned=True)
+        for i in range(motorCount):
+            self.MOTOR_TELEMETRY_DATA['rpm'][i] = self.readbytes(data, size=32, unsigned=True)
+            self.MOTOR_TELEMETRY_DATA['invalidPercent'][i] = self.readbytes(data, size=16, unsigned=True)
+            self.MOTOR_TELEMETRY_DATA['temperature'][i] = self.readbytes(data, size=8, unsigned=True)
+            self.MOTOR_TELEMETRY_DATA['voltage'][i] = self.readbytes(data, size=16, unsigned=True)
+            self.MOTOR_TELEMETRY_DATA['current'][i] = self.readbytes(data, size=16, unsigned=True)
+            self.MOTOR_TELEMETRY_DATA['consumption'][i] = self.readbytes(data, size=16, unsigned=True)
 
     def process_MSP_RC(self, data):
         n_channels = int(len(data) / 2)
